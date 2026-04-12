@@ -709,6 +709,15 @@ qboolean CL_SP_CopySaveScreenshot( byte *outRGBA, int outSize ) {
 	return qtrue;
 }
 
+/*
+ * CL_SP_UI_SG_GetSaveImage -- Read the 256x256 RGBA thumbnail from a save file.
+ *
+ * The UI's load-game screen calls this to display a preview image for each
+ * save slot.  We open saves/<name>.sav, skip past the COMM (comment) chunk,
+ * and read the SHOT (screenshot) chunk directly into pvAddress.
+ *
+ * Returns qtrue if the thumbnail was successfully read.
+ */
 static qboolean CL_SP_UI_SG_GetSaveImage( const char *psPathlessBaseName, void *pvAddress ) {
 	char baseName[MAX_QPATH];
 	char qpath[MAX_QPATH];
@@ -732,6 +741,13 @@ static qboolean CL_SP_UI_SG_GetSaveImage( const char *psPathlessBaseName, void *
 	return success;
 }
 
+/*
+ * CL_SP_UI_SG_GetSaveGameComment -- Read the comment string from a save file.
+ *
+ * Returns a pointer to a static buffer containing the null-terminated comment
+ * string (map name, date, etc.).  The pointer remains valid until the next
+ * call to this function or SG_GetSaveImage.  Returns NULL on failure.
+ */
 static void *CL_SP_UI_SG_GetSaveGameComment( const char *psPathlessBaseName ) {
 	char baseName[MAX_QPATH];
 	char qpath[MAX_QPATH];
@@ -757,6 +773,13 @@ static void *CL_SP_UI_SG_GetSaveGameComment( const char *psPathlessBaseName ) {
 	return cl_sp_loadedSaveComment;
 }
 
+/*
+ * CL_SP_UI_SG_ValidateForLoadSaveScreen -- Check if a save file is displayable.
+ *
+ * The UI calls this to determine whether a save slot should appear on the
+ * load/save screen.  We attempt to read both the COMM and SHOT chunks; if
+ * either is missing or corrupt, the slot is considered invalid.
+ */
 static qboolean CL_SP_UI_SG_ValidateForLoadSaveScreen( const char *psPathlessBaseName ) {
 	char baseName[MAX_QPATH];
 	char qpath[MAX_QPATH];
@@ -780,6 +803,14 @@ static qboolean CL_SP_UI_SG_ValidateForLoadSaveScreen( const char *psPathlessBas
 	return valid;
 }
 
+/*
+ * CL_SP_UI_SG_GameAllowedToSaveHere -- Ask the game module if saving is allowed.
+ *
+ * The original EF1 engine forwarded this call to the game DLL, which would
+ * return qfalse during cutscenes, scripted sequences, or other moments where
+ * a save would cause problems.  We reach across to the server-side SP bridge
+ * (SV_SP_GetGameExport) to call the game module's GameAllowedToSaveHere export.
+ */
 static qboolean CL_SP_UI_SG_GameAllowedToSaveHere( qboolean inCamera ) {
 	// Wire through to the SP game module's export if available
 	extern void *SV_SP_GetGameExport( void );
@@ -791,6 +822,14 @@ static qboolean CL_SP_UI_SG_GameAllowedToSaveHere( qboolean inCamera ) {
 	return qfalse;
 }
 
+/*
+ * CL_SP_UI_SG_StoreSaveGameComment -- Store a comment for the next save operation.
+ *
+ * Called by the UI when the player initiates a save.  The comment string
+ * (typically the map name and timestamp) is stashed in cl_sp_storedSaveComment
+ * and later written into the COMM chunk of the .sav file by the server-side
+ * save code.
+ */
 static void CL_SP_UI_SG_StoreSaveGameComment( const char *sComment ) {
 	memset( cl_sp_storedSaveComment, 0, sizeof( cl_sp_storedSaveComment ) );
 	if ( sComment ) {
@@ -798,6 +837,14 @@ static void CL_SP_UI_SG_StoreSaveGameComment( const char *sComment ) {
 	}
 }
 
+/*
+ * CL_SP_UI_SCR_GetScreenshot -- Get the current frame as a 256x256 RGBA image.
+ *
+ * Used by the save-game screen to show a live thumbnail of the current game.
+ * Captures from the framebuffer on first call (or if the cache is stale) and
+ * returns a pointer to the static 256x256 RGBA buffer.  The qboolean out-param
+ * is set to qtrue if the screenshot is valid.
+ */
 static byte *CL_SP_UI_SCR_GetScreenshot( qboolean *out ) {
 	if ( !cl_sp_cachedScreenshotValid ) {
 		CL_SP_CaptureSaveScreenshot();

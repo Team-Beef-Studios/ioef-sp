@@ -3,17 +3,49 @@
 This document covers building the ioEF engine (with SP bridge code) and the
 Elite Reinforce game DLLs from source on Windows.
 
+---
+
+## Quick Start
+
+For experienced developers who already have the toolchains installed:
+
+```bash
+# 1. Engine (MSYS2 MINGW32 shell)
+cd /e/Github/ioef
+make -j$(nproc)                    # release
+# or: make debug -j$(nproc)       # debug with symbols
+
+# 2. Game DLLs (VS Developer Command Prompt)
+cd E:\Github\Elite-Reinforce
+msbuild EF_SPMod.sln /p:Configuration=Release /p:Platform=Win32 /m
+
+# 3. Deploy
+cp /e/Github/Elite-Reinforce/Release/ef{game,ui}x86.dll \
+   build/release-mingw32-x86/baseEF/
+
+# 4. Run
+cd build/release-mingw32-x86
+./ioquake3.x86.exe +set sp_game 1 +set r_fullscreen 0 +map borg1
+```
+
+---
+
 ## Overview
 
-There are two components that must be built separately:
+There are two components that must be built separately with different
+toolchains. Both produce **32-bit x86** binaries. The engine loads the SP game
+DLLs at runtime via `GetGameAPI` / `dllEntry` / `vmMain` exports.
 
 | Component | Toolchain | Output |
 |-----------|-----------|--------|
 | **ioEF engine** | MSYS2 + MinGW (32-bit GCC) | `ioquake3.x86.exe`, `renderer_opengl1_x86.dll` |
 | **Elite Reinforce SP DLLs** | Visual Studio 2017+ | `efgamex86.dll`, `efuix86.dll` |
 
-Both produce **32-bit x86** binaries. The engine loads the SP game DLLs at
-runtime via `GetGameAPI` / `dllEntry` / `vmMain` exports.
+> **Why two toolchains?** The ioEF engine inherits ioquake3's GNU Make build
+> system, which targets GCC/MinGW. The Elite Reinforce game DLLs were developed
+> with Visual Studio and rely on MSVC-specific project files. Both produce
+> standard Win32 DLLs with C linkage, so they interoperate at runtime regardless
+> of which compiler built them.
 
 ---
 
@@ -79,6 +111,7 @@ build/release-mingw32-x86/
 | `BUILD_CLIENT` | 1 | Build the client binary |
 | `BUILD_SERVER` | 1 | Build the dedicated server |
 | `BUILD_GAME_SO` | 0 | Build baseq3 game DLLs (MP; not needed for SP) |
+| `BUILD_GAME_QVM` | 1 | Build QVM bytecode (set to 0 to skip; see GCC 15 note below) |
 | `USE_OPENAL` | 1 | OpenAL sound backend |
 | `USE_CURL` | 1 | HTTP/FTP download support |
 
@@ -87,6 +120,9 @@ Example building only the client with debug symbols:
 ```bash
 make debug -j$(nproc) BUILD_SERVER=0
 ```
+
+You can also create a `Makefile.local` file (gitignored) to persistently
+override variables without passing them on every command line.
 
 ### Cross-compiling from Linux
 
@@ -184,6 +220,9 @@ cd build/release-mingw32-x86
 
 # With logging enabled (writes qconsole.log to baseEF/)
 ./ioquake3.x86.exe +set r_fullscreen 0 +set sp_game 1 +set logfile 2 +map borg1
+
+# Suppress the safe-mode dialog (useful for automated/headless launches)
+./ioquake3.x86.exe +set r_fullscreen 0 +set sp_game 1 +set com_skipSafeDialog 1 +map borg1
 ```
 
 Key launch cvars:
@@ -194,6 +233,7 @@ Key launch cvars:
 | `r_fullscreen` | 0 | Windowed mode |
 | `logfile` | 2 | Write console output to `baseEF/qconsole.log` |
 | `com_hunkmegs` | 256 | Increase memory if needed |
+| `com_skipSafeDialog` | 1 | Skip the safe-mode dialog on startup |
 | `r_mode` | -1 | Custom resolution (use with r_customwidth/height) |
 
 ### Multiplayer mode (standard ioEF)
@@ -232,6 +272,65 @@ Set `+set logfile 2` on the command line. Output goes to
 `baseEF/qconsole.log`. This captures all `Com_Printf` output including SP
 bridge diagnostics.
 
+### MCP Inspector Server
+
+The `mcp/` directory contains a Model Context Protocol (MCP) server for live
+game engine inspection. It can query entity state, memory layouts, struct
+validation, and other runtime diagnostics from a running ioEF instance.
+
+```bash
+# Build and run the MCP inspector server
+cd mcp
+npm install
+npm run build
+npm start        # or: npm run dev (for development with auto-reload)
+```
+
+The inspector communicates with the game engine over a local connection and
+exposes tools for entity inspection, cvar queries, and struct validation.
+See `mcp/package.json` for available scripts.
+
+---
+
+## Project Structure
+
+### Engine source (`code/`)
+
+| Directory | Contents |
+|-----------|----------|
+| `code/client/` | Client main loop, input handling, sound, cgame/UI module loading |
+| `code/server/` | Server main loop, client connections, entity snapshots, game module loading |
+| `code/qcommon/` | Shared engine core: console/cvars, filesystem, network, collision, VM, memory |
+| `code/renderergl1/` | OpenGL 1.x fixed-function renderer (default) |
+| `code/renderergl2/` | Modern OpenGL renderer (off by default; `BUILD_RENDERER_OPENGL2=1`) |
+| `code/renderercommon/` | Shared renderer code (image loading, fonts) |
+| `code/sys/` | Platform abstraction (`sys_win32.c`, `sys_unix.c`) |
+| `code/sdl/` | SDL2 backend for windowing and input |
+| `code/botlib/` | Bot AI with AAS pathfinding |
+| `code/game/` | Server-side game rules (MP; SP uses external DLL) |
+| `code/cgame/` | Client-side prediction, HUD, effects (MP) |
+| `code/ui/`, `code/q3_ui/` | Menu system (MP) |
+| `code/tools/` | QVM compilation tools (lcc compiler, q3asm assembler) |
+| `code/jpeg-8c/`, `code/zlib/` | Bundled third-party libraries |
+
+### SP bridge files (the core of the ioEF singleplayer support)
+
+| File | Role |
+|------|------|
+| `code/server/sv_game_sp.c` | Server-side bridge: loads `efgamex86.dll` via `GetGameAPI`, maintains a shadow entity array, translates between SP `gentity_t` and engine `sharedEntity_t` |
+| `code/client/cl_cgame_sp.c` | Cgame syscall dispatcher: 71 SP syscalls with different numbering from MP's ~50, plus snapshot builder |
+| `code/client/cl_ui_sp.c` | UI bridge: loads `efuix86.dll` via `GetUIAPI`, provides save-game helpers |
+| `code/qcommon/sp_types.h` | Shared SP struct definitions (`sp_entityState_t`, `sp_playerState_t`, etc.) |
+| `code/qcommon/vm.c` | Fake VM support (`isFake` flag for bridge VMs that are not real QVMs) |
+
+### Other key files
+
+| File | Role |
+|------|------|
+| `Makefile` | GNU Make build system for the engine |
+| `CLAUDE.md` | Development context and architecture notes |
+| `mcp/` | MCP inspector server for live runtime diagnostics |
+
 ---
 
 ## Architecture Notes
@@ -266,6 +365,63 @@ The `sp_game` cvar triggers an alternate code path:
 ---
 
 ## Troubleshooting
+
+### Common build errors
+
+#### GCC 15 `constexpr` keyword conflict
+
+**Symptom:** Build fails in `code/tools/lcc/` with errors about `constexpr`
+being a reserved keyword.
+
+**Cause:** GCC 15 added `constexpr` as a C23 keyword. The LCC tool (QVM
+compiler) uses `constexpr` as an identifier in its own source code.
+
+**Fix:** Disable QVM building, which is not needed for SP development:
+
+```bash
+make -j$(nproc) BUILD_GAME_QVM=0
+```
+
+#### JPEG struct redefinition / type mismatch
+
+**Symptom:** Compiler errors about `jpeg_common_struct` or related JPEG types
+being redefined or having incompatible types.
+
+**Cause:** Conflict between the system-installed libjpeg headers and the
+bundled `code/jpeg-8c/` source. This typically happens when a system libjpeg
+development package is installed alongside the bundled copy.
+
+**Fix:** The engine uses its bundled JPEG library by default. Ensure you are
+not passing extra `-I` include paths that pull in system JPEG headers. If
+you have `mingw-w64-i686-libjpeg-turbo` installed, consider removing it or
+setting `USE_INTERNAL_JPEG=1` explicitly.
+
+#### glconfig_t size check assertion
+
+**Symptom:** Runtime error or assertion about `glconfig_t` size mismatch when
+loading the SP game DLLs.
+
+**Cause:** The SP game module includes a `clampToEdgeAvailable` field in its
+`glconfig_t` that the original ioquake3 `glconfig_t` did not have. If the
+engine and DLL disagree on the struct size, rendering initialization fails.
+
+**Fix:** This is already patched in ioEF -- the engine's `glconfig_t` includes
+the `clampToEdgeAvailable` field. If you see this error, make sure you are
+building from the current ioEF source (not upstream ioquake3) and that both
+the engine and game DLLs are freshly built.
+
+#### Safe-mode dialog blocks automated launch
+
+**Symptom:** The engine shows a "safe mode" dialog box on startup asking
+whether to reset settings, which blocks headless or automated launches.
+
+**Fix:** Pass `+set com_skipSafeDialog 1` on the command line:
+
+```bash
+./ioquake3.x86.exe +set sp_game 1 +set r_fullscreen 0 +set com_skipSafeDialog 1 +map borg1
+```
+
+### Runtime errors
 
 | Problem | Solution |
 |---------|----------|
