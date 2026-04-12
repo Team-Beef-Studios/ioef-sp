@@ -531,6 +531,245 @@ server.tool(
   }
 );
 
+// -- cvar_list ----------------------------------------------------------------
+
+server.tool(
+  "cvar_list",
+  "List all registered cvars in the engine, optionally filtered by name substring. Returns name, value, flags, default, and description for each cvar. Useful for discovering available settings.",
+  {
+    filter: z.string().default("").describe("Optional substring filter for cvar names (e.g. 'sv_', 'g_', 'r_')"),
+  },
+  async ({ filter }) => {
+    const result = await queryGame({ cmd: "cvarlist", str1: filter });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- configstrings ------------------------------------------------------------
+
+server.tool(
+  "configstrings",
+  "Dump the server's configstrings — indexed string table shared between server and clients. Contains model names, shader names, player info, game state, sound indices, etc. Only non-empty entries are returned.",
+  {
+    start: z.number().int().default(0).describe("Start index (default 0)"),
+    end: z.number().int().default(0).describe("End index (default 0 = all 1024)"),
+  },
+  async ({ start, end }) => {
+    const result = await queryGame({ cmd: "configstrings", num: start, value: end });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- game_log -----------------------------------------------------------------
+
+server.tool(
+  "game_log",
+  "Read captured engine log output (Com_Printf ring buffer). Supports cursor-based polling via since_id — pass the nextId from a previous call to get only new lines. Filter by substring to find specific messages.",
+  {
+    since_id: z.number().int().default(0).describe("Only return lines after this ID (for polling). Default 0 = recent."),
+    max_lines: z.number().int().default(100).describe("Max lines to return (default 100, max 512)"),
+    filter: z.string().default("").describe("Optional substring filter"),
+  },
+  async ({ since_id, max_lines, filter }) => {
+    const result = await queryGame({ cmd: "log", num: since_id, value: max_lines, str1: filter });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- set_entity ---------------------------------------------------------------
+
+server.tool(
+  "set_entity",
+  "Modify a field on a game entity at runtime. Changes take effect immediately and the entity is re-linked in the spatial hash. Writable fields: eType, eFlags, weapon, modelindex, modelindex2, clientNum, frame, solid, event, eventParm, powerups, loopSound, svFlags, contents, ownerNum, origin.x, origin.y, origin.z, legsAnim, torsoAnim.",
+  {
+    num: z.number().int().describe("Entity number"),
+    field: z.string().describe("Field name to modify"),
+    value: z.number().int().describe("New integer value"),
+  },
+  async ({ num, field, value }) => {
+    const result = await queryGame({ cmd: "set_entity", num, str1: field, value });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- trace --------------------------------------------------------------------
+
+server.tool(
+  "trace",
+  "Cast a ray between two points in the game world and report what it hits. Returns fraction (0-1), hit position, entity number, surface flags, plane normal. Use for line-of-sight checks, collision testing, finding walls/floors.",
+  {
+    start: z.string().describe("Start point as 'x,y,z' (e.g. '0,-1438,-400')"),
+    end: z.string().describe("End point as 'x,y,z' (e.g. '0,-1438,-500')"),
+    contentmask: z.number().int().default(-1).describe("Content mask for filtering (-1 = all)"),
+  },
+  async ({ start, end, contentmask }) => {
+    const result = await queryGame({ cmd: "trace", str1: start, str2: end, value: contentmask });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- entities_in_box ----------------------------------------------------------
+
+server.tool(
+  "entities_in_box",
+  "Find all entities within an axis-aligned bounding box. Returns entity numbers, types, and positions for everything in the region.",
+  {
+    mins: z.string().describe("Min corner as 'x,y,z' (e.g. '-500,-500,-500')"),
+    maxs: z.string().describe("Max corner as 'x,y,z' (e.g. '500,500,500')"),
+  },
+  async ({ mins, maxs }) => {
+    const result = await queryGame({ cmd: "entities_in_box", str1: mins, str2: maxs });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- watch_entity -------------------------------------------------------------
+
+server.tool(
+  "watch_entity",
+  "Set up watchpoints on entity fields to detect changes. Actions: 'add' (watch a field), 'remove' (by slot), 'clear' (remove all), or omit to poll current watchpoints and see which changed since last check.",
+  {
+    action: z
+      .enum(["add", "remove", "clear", "poll"])
+      .default("poll")
+      .describe("Action to perform"),
+    num: z.number().int().default(0).describe("Entity number (for 'add') or slot number (for 'remove')"),
+    field: z.string().default("").describe("Field name to watch (for 'add')"),
+  },
+  async ({ action, num, field }) => {
+    const result = await queryGame({ cmd: "watch", num, str1: field, str2: action });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- vm_trace -----------------------------------------------------------------
+
+server.tool(
+  "vm_trace",
+  "Trace game VM calls (GAME_RUN_FRAME, GAME_CLIENT_THINK, etc.) with timing. Actions: 'start' to begin tracing, 'stop' to end, or omit to read captured trace data. Shows which game module functions are being called and how long each takes.",
+  {
+    action: z
+      .enum(["start", "stop", "read"])
+      .default("read")
+      .describe("'start' to begin, 'stop' to end, 'read' to dump captured data"),
+    since_id: z.number().int().default(0).describe("Only return entries after this ID (for polling)"),
+  },
+  async ({ action, since_id }) => {
+    const op = action === "read" ? "" : action;
+    const result = await queryGame({ cmd: "vmtrace", num: since_id, str2: op });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- memory -------------------------------------------------------------------
+
+server.tool(
+  "memory_stats",
+  "Get engine memory statistics — hunk free bytes, entity/client allocation sizes, entity counts, snapshot buffer usage.",
+  {},
+  async () => {
+    const result = await queryGame({ cmd: "memory" });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- set_player ---------------------------------------------------------------
+
+server.tool(
+  "set_player",
+  "Modify a player's state at runtime. Writable fields: pm_type, pm_flags, gravity, speed, weapon, weaponstate, weaponTime, viewheight, eFlags, groundEntityNum, origin.x/y/z, velocity.x/y/z, viewangles.pitch/yaw, stats.N (0-15), ammo.N (0-15), persistant.N (0-15), powerups.N (0-15). stats.0 = health in most gametypes.",
+  {
+    num: z.number().int().describe("Client number (0 to maxclients-1)"),
+    field: z.string().describe("Field name (e.g. 'stats.0' for health, 'origin.z', 'weapon')"),
+    value: z.number().int().describe("New integer value"),
+  },
+  async ({ num, field, value }) => {
+    const result = await queryGame({ cmd: "set_player", num, str1: field, value });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- time_control -------------------------------------------------------------
+
+server.tool(
+  "time_control",
+  "Control the game's time flow. Actions: 'pause' freezes the game simulation (MCP still responds), 'resume' unpauses, 'step' advances N frames then re-pauses, 'timescale' sets speed multiplier (value in hundredths: 50=0.5x, 100=1x, 200=2x), or omit action to query current state.",
+  {
+    action: z
+      .enum(["pause", "resume", "step", "timescale", "status"])
+      .default("status")
+      .describe("Action to perform"),
+    value: z
+      .number()
+      .int()
+      .default(0)
+      .describe("For 'step': number of frames. For 'timescale': speed * 100 (e.g. 50 = half speed)."),
+  },
+  async ({ action, value }) => {
+    const op = action === "status" ? "" : action;
+    const result = await queryGame({ cmd: "time", num: value, str2: op });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- map_list -----------------------------------------------------------------
+
+server.tool(
+  "map_list",
+  "List all available maps found in the game's pk3 files. Use this to discover what maps can be loaded with exec_command('map X') or launch_game.",
+  {},
+  async () => {
+    const result = await queryGame({ cmd: "maplist" });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- snapshot_diff ------------------------------------------------------------
+
+server.tool(
+  "snapshot_diff",
+  "Capture a snapshot of all entity state, then later diff against current state to see exactly what changed. Actions: 'capture' saves current state, 'diff' compares saved vs. current and shows all field changes, 'status' shows if a snapshot exists.",
+  {
+    action: z
+      .enum(["capture", "diff", "status"])
+      .default("status")
+      .describe("'capture' to save state, 'diff' to compare, 'status' to check"),
+  },
+  async ({ action }) => {
+    const result = await queryGame({ cmd: "snapshot", str2: action });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- memory_peek --------------------------------------------------------------
+
+server.tool(
+  "memory_peek",
+  "Read raw bytes from a game entity's memory — including the game module's private data beyond sharedEntity_t. Returns hex dump, int32 array, and float interpretation. sharedEntity_t is 304 bytes; bytes 304+ are the game module's private gentity_t fields.",
+  {
+    entity_num: z.number().int().describe("Entity number"),
+    offset: z.number().int().default(0).describe("Byte offset from entity start (0 = sharedEntity_t.s, 304+ = game private data)"),
+  },
+  async ({ entity_num, offset }) => {
+    const result = await queryGame({ cmd: "peek", num: entity_num, value: offset });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- point_contents -----------------------------------------------------------
+
+server.tool(
+  "point_contents",
+  "Query what content types exist at a specific world point — solid, water, lava, slime, trigger, playerclip, etc. Uses the engine's collision system.",
+  {
+    point: z.string().describe("Point as 'x,y,z' (e.g. '0,-1438,-400')"),
+  },
+  async ({ point }) => {
+    const result = await queryGame({ cmd: "point_contents", str1: point });
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------

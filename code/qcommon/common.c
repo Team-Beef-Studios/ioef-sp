@@ -197,6 +197,12 @@ void QDECL Com_Printf( const char *fmt, ... ) {
 	// echo to dedicated console and early console
 	Sys_Print( msg );
 
+	// feed debug server log ring buffer
+	if ( com_sv_running && com_sv_running->integer ) {
+		extern void DebugServer_LogCapture( const char *text );
+		DebugServer_LogCapture( msg );
+	}
+
 	// logfile
 	if ( com_logfile && com_logfile->integer ) {
     // TTimo: only open the qconsole.log if the filesystem is in an initialized state

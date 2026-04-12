@@ -71,6 +71,7 @@ module's live data.
 #ifdef ELITEFORCE
 
 #include "client.h"
+#include "snd_local.h"
 #include "../qcommon/sp_types.h"
 
 /*
@@ -88,6 +89,33 @@ module's live data.
  */
 extern void *SV_SP_GetRawPlayerState( void );
 extern sp_entityState_t *SV_SP_GetRawEntityState( int entNum );
+extern sfx_t s_knownSfx[];
+extern int s_numSfx;
+
+static void CL_SP_SetFallbackLighting( vec_t *ambientLight, vec_t *directedLight, vec_t *lightDir ) {
+	VectorSet( ambientLight, 255.0f, 255.0f, 255.0f );
+	VectorSet( directedLight, 255.0f, 255.0f, 255.0f );
+	VectorSet( lightDir, 0.0f, 0.0f, 1.0f );
+}
+
+static intptr_t CL_SP_GetSampleLengthMilliseconds( sfxHandle_t sfxHandle ) {
+	sfx_t *sfx;
+
+	if ( sfxHandle < 0 || sfxHandle >= s_numSfx || dma.speed <= 0 ) {
+		return 0;
+	}
+
+	sfx = &s_knownSfx[sfxHandle];
+	if ( sfx->inMemory == qfalse ) {
+		S_memoryLoad( sfx );
+	}
+
+	if ( sfx->soundLength <= 0 ) {
+		return 0;
+	}
+
+	return ( (intptr_t)sfx->soundLength * 1000 ) / dma.speed;
+}
 
 /*
  * EF1 SP cgame syscall numbers.
@@ -401,12 +429,14 @@ intptr_t CL_SPCgameSystemCalls( intptr_t *args ) {
 		re.AddRefEntityToScene( VMA(1) );
 		return 0;
 	case SPCG_R_GETLIGHTING:
-		// SP-only renderer call: R_GetLighting.  The original Ritual renderer
-		// could query the lightmap/light grid at an arbitrary world point and
-		// return the lighting color/intensity.  The SP cgame used this to tint
-		// certain HUD elements or particle effects to match the environment's
-		// lighting.  ioEF's renderer doesn't expose this query, so we return 0
-		// (the cgame falls back to default lighting when the call fails).
+		/*
+		 * The SP cgame reads the output vectors unconditionally and uses the
+		 * directed light intensity for gameplay (stealth visibility). Provide
+		 * deterministic output even when the renderer has no light-grid data.
+		 */
+		if ( !re.LightForPoint( VMA(1), VMA(2), VMA(3), VMA(4) ) ) {
+			CL_SP_SetFallbackLighting( VMA(2), VMA(3), VMA(4) );
+		}
 		return 0;
 	case SPCG_R_ADDPOLYTOSCENE:
 		re.AddPolyToScene( args[1], args[2], VMA(3), 1 );
@@ -427,10 +457,9 @@ intptr_t CL_SPCgameSystemCalls( intptr_t *args ) {
 	case SPCG_R_DRAWSCREENSHOT:
 		// SP-only renderer call: R_DrawScreenShot.  The original engine could
 		// capture a screenshot into a texture and then draw it as a 2D element.
-		// The SP cgame used this for transition effects (e.g., freezing the
-		// current frame, then fading/wiping to a new scene during level loads
-		// or cinematic transitions).  Not implemented in ioEF; the transitions
-		// simply won't display, which is cosmetically minor.
+		// The SP cgame uses this to preserve the current backbuffer during
+		// transitions. ioEF has no equivalent hook, so we intentionally leave
+		// the existing framebuffer contents untouched.
 		return 0;
 	case SPCG_R_MODELBOUNDS:
 		re.ModelBounds( args[1], VMA(2), VMA(3) );
@@ -438,18 +467,15 @@ intptr_t CL_SPCgameSystemCalls( intptr_t *args ) {
 	case SPCG_R_LERPTAG:
 		return re.LerpTag( VMA(1), args[2], args[3], args[4], VMF(5), VMA(6) );
 	case SPCG_R_DRAWROTATEPIC:
-		// SP-only renderer call: R_DrawRotatePic.  Like R_DrawStretchPic but
-		// with an additional rotation angle parameter.  The SP cgame used this
-		// for rotating HUD compass elements, spinning weapon charge indicators,
-		// and some cinematic overlay effects.  Without it, those elements
-		// simply don't appear -- not ideal but not game-breaking.
+		/* Preserve the art even when we cannot honor the rotation angle. */
+		re.DrawStretchPic( VMF(1), VMF(2), VMF(3), VMF(4), VMF(5), VMF(6), VMF(7), VMF(8), args[10] );
 		return 0;
 	case SPCG_R_SCISSOR:
 		// SP-only renderer call: R_Scissor.  Sets a rectangular scissor/clip
 		// region for subsequent 2D drawing.  The SP cgame used this to clip
 		// HUD elements to specific screen regions (e.g., the text crawl in
-		// mission briefings, scrolling objective lists).  Without it, text
-		// may overdraw slightly outside intended boundaries.
+		// mission briefings, scrolling objective lists). ioEF's renderer has
+		// no exported 2D scissor hook, so this remains a no-op.
 		return 0;
 
 	// --- client state ---
@@ -626,15 +652,15 @@ intptr_t CL_SPCgameSystemCalls( intptr_t *args ) {
 	case SPCG_S_UPDATEAMBIENTSET:	/* refresh which ambient set is active for the player's position */
 		return 0;
 	case SPCG_S_ADDLOCALSET:		/* register a local ambient set at a specific world position */
-		return 0;
+		return args[5];
 	case SPCG_AS_PARSESETS:			/* parse ambient set definitions from a text file/buffer */
 		return 0;
 	case SPCG_AS_ADDENTRY:			/* add a sound entry to an ambient set */
 		return 0;
 	case SPCG_AS_GETBMODELSOUND:	/* query which ambient sound a brush model should emit */
-		return 0;
+		return -1;
 	case SPCG_S_GETSAMPLELENGTH:	/* query duration of a sound sample in milliseconds */
-		return 0;
+		return CL_SP_GetSampleLengthMilliseconds( args[1] );
 
 	default:
 		Com_Error( ERR_DROP, "Bad SP cgame system trap: %ld", (long int) args[0] );

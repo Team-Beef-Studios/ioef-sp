@@ -14,6 +14,7 @@ Enable with cvar: sv_debugPort (default 29070, 0 = disabled)
 */
 
 #include "server.h"
+#include "../qcommon/sp_types.h"
 #include <stddef.h>
 #include <math.h>
 
@@ -70,6 +71,51 @@ static debug_socket_t   debugListenSock = DEBUG_INVALID_SOCK;
 static debugClient_t    debugClients[DEBUG_MAX_CLIENTS];
 static cvar_t           *sv_debugPort;
 static qboolean         debugInitialized = qfalse;
+
+// ------------------------------------------------------------------
+// Log ring buffer — captures Com_Printf output
+// ------------------------------------------------------------------
+
+#define LOG_RING_LINES  512
+#define LOG_LINE_MAX    256
+
+static char     logRing[LOG_RING_LINES][LOG_LINE_MAX];
+static int      logRingHead = 0;      // next write slot
+static int      logRingCount = 0;     // total lines ever written (monotonic ID)
+static char     logLineBuf[LOG_LINE_MAX]; // accumulates partial line
+static int      logLineBufLen = 0;
+
+// ------------------------------------------------------------------
+// Entity watchpoints
+// ------------------------------------------------------------------
+
+#define MAX_WATCHPOINTS 16
+
+typedef struct {
+	qboolean    active;
+	int         entNum;
+	char        field[32];
+	int         lastValue;
+} watchpoint_t;
+
+static watchpoint_t watchpoints[MAX_WATCHPOINTS];
+
+// ------------------------------------------------------------------
+// VM call tracing
+// ------------------------------------------------------------------
+
+#define VMTRACE_RING_SIZE 256
+
+typedef struct {
+	int     command;
+	int     serverTime;
+	int     durationUsec;
+} vmTraceEntry_t;
+
+static vmTraceEntry_t vmTraceRing[VMTRACE_RING_SIZE];
+static int            vmTraceHead = 0;
+static int            vmTraceCount = 0;
+static qboolean       vmTraceEnabled = qfalse;
 
 // ------------------------------------------------------------------
 // JSON response builder helpers
@@ -702,6 +748,117 @@ static void debug_cmd_layout(jsonBuf_t *jb, const char *structName) {
 		LAYOUT_FIELD(jb, playerState_t, entityEventSequence, f);
 		jb_raw(jb, "]");
 
+	} else if (!strcmp(structName, "sp_entityState_t")) {
+		jb_raw(jb, ",");
+		jb_int(jb, "totalSize", (int)sizeof(sp_entityState_t));
+		jb_raw(jb, ",\"fields\":[");
+		int f = 1;
+		LAYOUT_FIELD(jb, sp_entityState_t, number, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, eType, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, eFlags, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, pos, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, apos, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, time, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, time2, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, origin, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, origin2, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, angles, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, angles2, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, otherEntityNum, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, otherEntityNum2, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, groundEntityNum, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, constantLight, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, loopSound, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, modelindex, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, modelindex2, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, modelindex3, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, clientNum, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, frame, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, solid, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, event, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, eventParm, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, powerups, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, weapon, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, legsAnim, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, legsAnimTimer, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, torsoAnim, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, torsoAnimTimer, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, scale, f);
+		LAYOUT_FIELD(jb, sp_entityState_t, pushVec, f);
+		jb_raw(jb, "]");
+
+	} else if (!strcmp(structName, "sp_playerState_t")) {
+		jb_raw(jb, ",");
+		jb_int(jb, "totalSize", (int)sizeof(sp_playerState_t));
+		jb_raw(jb, ",\"fields\":[");
+		int f = 1;
+		LAYOUT_FIELD(jb, sp_playerState_t, commandTime, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, pm_type, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, bobCycle, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, pm_flags, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, pm_time, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, origin, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, velocity, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, weaponTime, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, rechargeTime, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, useTime, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, gravity, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, leanofs, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, friction, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, speed, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, delta_angles, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, groundEntityNum, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, legsAnim, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, legsAnimTimer, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, torsoAnim, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, torsoAnimTimer, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, scale, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, movementDir, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, eFlags, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, eventSequence, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, events, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, eventParms, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, externalEvent, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, externalEventParm, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, externalEventTime, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, clientNum, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, weapon, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, weaponstate, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, viewangles, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, viewheight, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, damageEvent, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, damageYaw, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, damagePitch, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, damageCount, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, stats, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, persistant, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, powerups, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, ammo, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, borgAdaptHits, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, pushVec, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, ping, f);
+		LAYOUT_FIELD(jb, sp_playerState_t, leanStopDebounceTime, f);
+		jb_raw(jb, "]");
+
+	} else if (!strcmp(structName, "sp_snapshot_t")) {
+		jb_raw(jb, ",");
+		jb_int(jb, "totalSize", (int)sizeof(sp_snapshot_t));
+		jb_raw(jb, ",\"fields\":[");
+		int f = 1;
+		LAYOUT_FIELD(jb, sp_snapshot_t, snapFlags, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, ping, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, serverTime, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, areamask, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, cmdNum, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, ps, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, numEntities, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, entities, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, numConfigstringChanges, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, configstringNum, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, numServerCommands, f);
+		LAYOUT_FIELD(jb, sp_snapshot_t, serverCommandSequence, f);
+		jb_raw(jb, "]");
+
 	} else if (!strcmp(structName, "sharedEntity_t")) {
 		jb_raw(jb, ",");
 		jb_int(jb, "totalSize", (int)sizeof(sharedEntity_t));
@@ -750,6 +907,9 @@ static void debug_cmd_layout(jsonBuf_t *jb, const char *structName) {
 		jb_raw(jb, ","); jb_int(jb, "entityShared_t", (int)sizeof(entityShared_t));
 		jb_raw(jb, ","); jb_int(jb, "sharedEntity_t", (int)sizeof(sharedEntity_t));
 		jb_raw(jb, ","); jb_int(jb, "playerState_t", (int)sizeof(playerState_t));
+		jb_raw(jb, ","); jb_int(jb, "sp_entityState_t", (int)sizeof(sp_entityState_t));
+		jb_raw(jb, ","); jb_int(jb, "sp_playerState_t", (int)sizeof(sp_playerState_t));
+		jb_raw(jb, ","); jb_int(jb, "sp_snapshot_t", (int)sizeof(sp_snapshot_t));
 		jb_raw(jb, ","); jb_int(jb, "trajectory_t", (int)sizeof(trajectory_t));
 		jb_raw(jb, ","); jb_int(jb, "usercmd_t", (int)sizeof(usercmd_t));
 		jb_raw(jb, ","); jb_int(jb, "svEntity_t", (int)sizeof(svEntity_t));
@@ -761,7 +921,7 @@ static void debug_cmd_layout(jsonBuf_t *jb, const char *structName) {
 		jb_raw(jb, ",");
 		jb_str(jb, "error", "unknown struct name");
 		jb_raw(jb, ",");
-		jb_str(jb, "available", "entityState_t, entityShared_t, playerState_t, sharedEntity_t, trajectory_t, usercmd_t, all");
+		jb_str(jb, "available", "entityState_t, entityShared_t, playerState_t, sp_entityState_t, sp_playerState_t, sp_snapshot_t, sharedEntity_t, trajectory_t, usercmd_t, all");
 	}
 
 	jb_raw(jb, "}\n");
@@ -1017,6 +1177,861 @@ static void debug_cmd_validate_all(jsonBuf_t *jb) {
 }
 
 // ------------------------------------------------------------------
+// Cvar list — walk the entire cvar linked list
+// ------------------------------------------------------------------
+
+extern cvar_t *cvar_vars;
+
+static void debug_cmd_cvarlist(jsonBuf_t *jb, const char *filter) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "cvarlist");
+	jb_raw(jb, ",\"cvars\":[");
+
+	cvar_t *cv;
+	int first = 1;
+	int count = 0;
+	for (cv = cvar_vars; cv; cv = cv->next) {
+		if (filter[0] && !strstr(cv->name, filter)) continue;
+		if (!first) jb_raw(jb, ",");
+		first = 0;
+		jb_raw(jb, "{");
+		jb_str(jb, "name", cv->name);
+		jb_raw(jb, ","); jb_str(jb, "value", cv->string);
+		jb_raw(jb, ","); jb_int(jb, "integer", cv->integer);
+		jb_raw(jb, ","); jb_int(jb, "flags", cv->flags);
+		if (cv->latchedString) { jb_raw(jb, ","); jb_str(jb, "latched", cv->latchedString); }
+		if (cv->resetString) { jb_raw(jb, ","); jb_str(jb, "default", cv->resetString); }
+		if (cv->description) { jb_raw(jb, ","); jb_str(jb, "description", cv->description); }
+		jb_raw(jb, "}");
+		count++;
+	}
+
+	jb_raw(jb, "],");
+	jb_int(jb, "count", count);
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// Configstring dump
+// ------------------------------------------------------------------
+
+static void debug_cmd_configstrings(jsonBuf_t *jb, int startIdx, int endIdx) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "configstrings");
+
+	if (endIdx <= 0 || endIdx > MAX_CONFIGSTRINGS) endIdx = MAX_CONFIGSTRINGS;
+	if (startIdx < 0) startIdx = 0;
+
+	jb_raw(jb, ",\"strings\":[");
+	int first = 1;
+	int i;
+	for (i = startIdx; i < endIdx; i++) {
+		if (!sv.configstrings[i] || !sv.configstrings[i][0]) continue;
+		if (!first) jb_raw(jb, ",");
+		first = 0;
+		jb_raw(jb, "{");
+		jb_int(jb, "index", i);
+		jb_raw(jb, ",");
+		jb_str(jb, "value", sv.configstrings[i]);
+		jb_raw(jb, "}");
+	}
+	jb_raw(jb, "]}\n");
+}
+
+// ------------------------------------------------------------------
+// Log ring buffer — capture/query
+// ------------------------------------------------------------------
+
+void DebugServer_LogCapture(const char *text) {
+	if (!debugInitialized) return;
+
+	const char *p = text;
+	while (*p) {
+		if (*p == '\n' || logLineBufLen >= LOG_LINE_MAX - 1) {
+			logLineBuf[logLineBufLen] = '\0';
+			if (logLineBufLen > 0) {
+				Q_strncpyz(logRing[logRingHead % LOG_RING_LINES], logLineBuf, LOG_LINE_MAX);
+				logRingHead++;
+				logRingCount++;
+			}
+			logLineBufLen = 0;
+			if (*p == '\n') p++;
+			continue;
+		}
+		logLineBuf[logLineBufLen++] = *p;
+		p++;
+	}
+}
+
+static void debug_cmd_log(jsonBuf_t *jb, int sinceId, int maxLines, const char *filter) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "log");
+
+	if (maxLines <= 0 || maxLines > LOG_RING_LINES) maxLines = 100;
+
+	int startIdx = logRingHead - LOG_RING_LINES;
+	if (startIdx < 0) startIdx = 0;
+	if (sinceId > startIdx) startIdx = sinceId;
+
+	jb_raw(jb, ",\"lines\":[");
+	int first = 1;
+	int count = 0;
+	int i;
+	for (i = startIdx; i < logRingHead && count < maxLines; i++) {
+		const char *line = logRing[i % LOG_RING_LINES];
+		if (filter[0] && !strstr(line, filter)) continue;
+		if (!first) jb_raw(jb, ",");
+		first = 0;
+		jb_raw(jb, "{");
+		jb_int(jb, "id", i);
+		jb_raw(jb, ",");
+		jb_str(jb, "text", line);
+		jb_raw(jb, "}");
+		count++;
+	}
+	jb_raw(jb, "],");
+	jb_int(jb, "nextId", logRingHead);
+	jb_raw(jb, ",");
+	jb_int(jb, "totalCaptured", logRingCount);
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// Entity modification — write fields on sharedEntity_t
+// ------------------------------------------------------------------
+
+static int debug_get_entity_field(sharedEntity_t *ent, const char *field) {
+	if (!strcmp(field, "eType")) return ent->s.eType;
+	if (!strcmp(field, "eFlags")) return ent->s.eFlags;
+	if (!strcmp(field, "weapon")) return ent->s.weapon;
+	if (!strcmp(field, "modelindex")) return ent->s.modelindex;
+	if (!strcmp(field, "modelindex2")) return ent->s.modelindex2;
+	if (!strcmp(field, "clientNum")) return ent->s.clientNum;
+	if (!strcmp(field, "frame")) return ent->s.frame;
+	if (!strcmp(field, "solid")) return ent->s.solid;
+	if (!strcmp(field, "event")) return ent->s.event;
+	if (!strcmp(field, "eventParm")) return ent->s.eventParm;
+	if (!strcmp(field, "powerups")) return ent->s.powerups;
+	if (!strcmp(field, "loopSound")) return ent->s.loopSound;
+	if (!strcmp(field, "constantLight")) return ent->s.constantLight;
+	if (!strcmp(field, "otherEntityNum")) return ent->s.otherEntityNum;
+	if (!strcmp(field, "groundEntityNum")) return ent->s.groundEntityNum;
+	if (!strcmp(field, "svFlags")) return ent->r.svFlags;
+	if (!strcmp(field, "contents")) return ent->r.contents;
+	if (!strcmp(field, "ownerNum")) return ent->r.ownerNum;
+	if (!strcmp(field, "legsAnim")) return ent->s.legsAnim;
+	if (!strcmp(field, "torsoAnim")) return ent->s.torsoAnim;
+	return 0;
+}
+
+static qboolean debug_set_entity_field(sharedEntity_t *ent, const char *field, int value) {
+	if (!strcmp(field, "eType")) { ent->s.eType = value; return qtrue; }
+	if (!strcmp(field, "eFlags")) { ent->s.eFlags = value; return qtrue; }
+	if (!strcmp(field, "weapon")) { ent->s.weapon = value; return qtrue; }
+	if (!strcmp(field, "modelindex")) { ent->s.modelindex = value; return qtrue; }
+	if (!strcmp(field, "modelindex2")) { ent->s.modelindex2 = value; return qtrue; }
+	if (!strcmp(field, "clientNum")) { ent->s.clientNum = value; return qtrue; }
+	if (!strcmp(field, "frame")) { ent->s.frame = value; return qtrue; }
+	if (!strcmp(field, "solid")) { ent->s.solid = value; return qtrue; }
+	if (!strcmp(field, "event")) { ent->s.event = value; return qtrue; }
+	if (!strcmp(field, "eventParm")) { ent->s.eventParm = value; return qtrue; }
+	if (!strcmp(field, "powerups")) { ent->s.powerups = value; return qtrue; }
+	if (!strcmp(field, "loopSound")) { ent->s.loopSound = value; return qtrue; }
+	if (!strcmp(field, "svFlags")) { ent->r.svFlags = value; return qtrue; }
+	if (!strcmp(field, "contents")) { ent->r.contents = value; return qtrue; }
+	if (!strcmp(field, "ownerNum")) { ent->r.ownerNum = value; return qtrue; }
+	// origin components
+	if (!strcmp(field, "origin.x")) { ent->s.origin[0] = (float)value; ent->s.pos.trBase[0] = (float)value; ent->r.currentOrigin[0] = (float)value; return qtrue; }
+	if (!strcmp(field, "origin.y")) { ent->s.origin[1] = (float)value; ent->s.pos.trBase[1] = (float)value; ent->r.currentOrigin[1] = (float)value; return qtrue; }
+	if (!strcmp(field, "origin.z")) { ent->s.origin[2] = (float)value; ent->s.pos.trBase[2] = (float)value; ent->r.currentOrigin[2] = (float)value; return qtrue; }
+	return qfalse;
+}
+
+static void debug_cmd_set_entity(jsonBuf_t *jb, int num, const char *field, int value) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "set_entity");
+
+	if (!sv.gentities || num < 0 || num >= sv.num_entities) {
+		jb_raw(jb, ","); jb_str(jb, "error", "invalid entity number");
+		jb_raw(jb, "}\n");
+		return;
+	}
+	if (!field[0]) {
+		jb_raw(jb, ","); jb_str(jb, "error", "field name required");
+		jb_raw(jb, "}\n");
+		return;
+	}
+
+	sharedEntity_t *ent = SV_GentityNum(num);
+	int oldVal = debug_get_entity_field(ent, field);
+
+	if (!debug_set_entity_field(ent, field, value)) {
+		jb_raw(jb, ","); jb_str(jb, "error", "unknown or read-only field");
+		jb_raw(jb, ","); jb_str(jb, "field", field);
+		jb_raw(jb, "}\n");
+		return;
+	}
+
+	// Re-link if the entity is currently linked (updates spatial hash)
+	if (ent->r.linked) {
+		SV_LinkEntity(ent);
+	}
+
+	jb_raw(jb, ","); jb_int(jb, "num", num);
+	jb_raw(jb, ","); jb_str(jb, "field", field);
+	jb_raw(jb, ","); jb_int(jb, "oldValue", oldVal);
+	jb_raw(jb, ","); jb_int(jb, "newValue", value);
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// Spatial trace (ray cast)
+// ------------------------------------------------------------------
+
+static void debug_cmd_trace(jsonBuf_t *jb, const debugCmd_t *cmd) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "trace");
+
+	// Parse "x1,y1,z1" from strArg1 and "x2,y2,z2" from strArg2
+	vec3_t start = {0,0,0}, end = {0,0,0};
+	sscanf(cmd->strArg1, "%f,%f,%f", &start[0], &start[1], &start[2]);
+	sscanf(cmd->strArg2, "%f,%f,%f", &end[0], &end[1], &end[2]);
+
+	int contentmask = cmd->hasIntArg2 ? cmd->intArg2 : -1; // MASK_ALL by default
+
+	trace_t tr;
+	SV_Trace(&tr, start, NULL, NULL, end, ENTITYNUM_NONE, contentmask, 0);
+
+	jb_raw(jb, ","); jb_vec3(jb, "start", start);
+	jb_raw(jb, ","); jb_vec3(jb, "end", end);
+	jb_raw(jb, ","); jb_float(jb, "fraction", tr.fraction);
+	jb_raw(jb, ","); jb_vec3(jb, "endpos", tr.endpos);
+	jb_raw(jb, ","); jb_bool(jb, "allsolid", tr.allsolid);
+	jb_raw(jb, ","); jb_bool(jb, "startsolid", tr.startsolid);
+	jb_raw(jb, ","); jb_int(jb, "entityNum", tr.entityNum);
+	jb_raw(jb, ","); jb_int(jb, "surfaceFlags", tr.surfaceFlags);
+	jb_raw(jb, ","); jb_int(jb, "contents", tr.contents);
+	jb_raw(jb, ","); jb_vec3(jb, "planeNormal", tr.plane.normal);
+	jb_raw(jb, ","); jb_float(jb, "planeDist", tr.plane.dist);
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// Entities in box (spatial query)
+// ------------------------------------------------------------------
+
+static void debug_cmd_entities_in_box(jsonBuf_t *jb, const debugCmd_t *cmd) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "entities_in_box");
+
+	vec3_t mins = {0,0,0}, maxs = {0,0,0};
+	sscanf(cmd->strArg1, "%f,%f,%f", &mins[0], &mins[1], &mins[2]);
+	sscanf(cmd->strArg2, "%f,%f,%f", &maxs[0], &maxs[1], &maxs[2]);
+
+	int entityList[MAX_GENTITIES];
+	int count = SV_AreaEntities(mins, maxs, entityList, MAX_GENTITIES);
+
+	jb_raw(jb, ","); jb_vec3(jb, "mins", mins);
+	jb_raw(jb, ","); jb_vec3(jb, "maxs", maxs);
+	jb_raw(jb, ","); jb_int(jb, "count", count);
+	jb_raw(jb, ",\"entities\":[");
+	int first = 1;
+	int i;
+	for (i = 0; i < count; i++) {
+		sharedEntity_t *ent = SV_GentityNum(entityList[i]);
+		if (!first) jb_raw(jb, ",");
+		first = 0;
+		jb_raw(jb, "{");
+		jb_int(jb, "num", entityList[i]);
+		jb_raw(jb, ","); jb_int(jb, "eType", ent->s.eType);
+		jb_raw(jb, ","); jb_vec3(jb, "origin", ent->s.origin);
+		jb_raw(jb, "}");
+	}
+	jb_raw(jb, "]}\n");
+}
+
+// ------------------------------------------------------------------
+// Entity watchpoints
+// ------------------------------------------------------------------
+
+static void debug_cmd_watch(jsonBuf_t *jb, const debugCmd_t *cmd) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "watch");
+
+	if (!strcmp(cmd->strArg2, "add")) {
+		int slot = -1;
+		int i;
+		for (i = 0; i < MAX_WATCHPOINTS; i++) {
+			if (!watchpoints[i].active) { slot = i; break; }
+		}
+		if (slot < 0) {
+			jb_raw(jb, ","); jb_str(jb, "error", "max watchpoints reached");
+			jb_raw(jb, "}\n");
+			return;
+		}
+		watchpoints[slot].active = qtrue;
+		watchpoints[slot].entNum = cmd->intArg1;
+		Q_strncpyz(watchpoints[slot].field, cmd->strArg1, sizeof(watchpoints[slot].field));
+		if (sv.gentities && cmd->intArg1 >= 0 && cmd->intArg1 < sv.num_entities) {
+			watchpoints[slot].lastValue = debug_get_entity_field(SV_GentityNum(cmd->intArg1), cmd->strArg1);
+		}
+		jb_raw(jb, ","); jb_str(jb, "action", "added");
+		jb_raw(jb, ","); jb_int(jb, "slot", slot);
+		jb_raw(jb, ","); jb_int(jb, "entNum", cmd->intArg1);
+		jb_raw(jb, ","); jb_str(jb, "field", cmd->strArg1);
+	} else if (!strcmp(cmd->strArg2, "remove")) {
+		if (cmd->intArg1 >= 0 && cmd->intArg1 < MAX_WATCHPOINTS) {
+			watchpoints[cmd->intArg1].active = qfalse;
+			jb_raw(jb, ","); jb_str(jb, "action", "removed");
+			jb_raw(jb, ","); jb_int(jb, "slot", cmd->intArg1);
+		} else {
+			jb_raw(jb, ","); jb_str(jb, "error", "invalid slot");
+		}
+	} else if (!strcmp(cmd->strArg2, "clear")) {
+		int i;
+		for (i = 0; i < MAX_WATCHPOINTS; i++) watchpoints[i].active = qfalse;
+		jb_raw(jb, ","); jb_str(jb, "action", "cleared");
+	} else {
+		// List watchpoints and check for changes
+		jb_raw(jb, ",\"watchpoints\":[");
+		int first = 1;
+		int i;
+		for (i = 0; i < MAX_WATCHPOINTS; i++) {
+			if (!watchpoints[i].active) continue;
+			if (!first) jb_raw(jb, ",");
+			first = 0;
+			int curVal = 0;
+			qboolean changed = qfalse;
+			if (sv.gentities && watchpoints[i].entNum >= 0 && watchpoints[i].entNum < sv.num_entities) {
+				curVal = debug_get_entity_field(SV_GentityNum(watchpoints[i].entNum), watchpoints[i].field);
+				if (curVal != watchpoints[i].lastValue) {
+					changed = qtrue;
+					watchpoints[i].lastValue = curVal;
+				}
+			}
+			jb_raw(jb, "{");
+			jb_int(jb, "slot", i);
+			jb_raw(jb, ","); jb_int(jb, "entNum", watchpoints[i].entNum);
+			jb_raw(jb, ","); jb_str(jb, "field", watchpoints[i].field);
+			jb_raw(jb, ","); jb_int(jb, "value", curVal);
+			jb_raw(jb, ","); jb_bool(jb, "changed", changed);
+			jb_raw(jb, "}");
+		}
+		jb_raw(jb, "]");
+	}
+
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// VM call trace
+// ------------------------------------------------------------------
+
+void DebugServer_TraceVMCall(int command, int serverTime, int durationUsec) {
+	if (!vmTraceEnabled) return;
+	vmTraceEntry_t *e = &vmTraceRing[vmTraceHead % VMTRACE_RING_SIZE];
+	e->command = command;
+	e->serverTime = serverTime;
+	e->durationUsec = durationUsec;
+	vmTraceHead++;
+	vmTraceCount++;
+}
+
+static void debug_cmd_vmtrace(jsonBuf_t *jb, const debugCmd_t *cmd) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "vmtrace");
+
+	if (!strcmp(cmd->strArg2, "start")) {
+		vmTraceEnabled = qtrue;
+		vmTraceHead = 0;
+		vmTraceCount = 0;
+		jb_raw(jb, ","); jb_str(jb, "action", "started");
+	} else if (!strcmp(cmd->strArg2, "stop")) {
+		vmTraceEnabled = qfalse;
+		jb_raw(jb, ","); jb_str(jb, "action", "stopped");
+		jb_raw(jb, ","); jb_int(jb, "totalCalls", vmTraceCount);
+	} else {
+		// Dump recent calls
+		jb_raw(jb, ","); jb_bool(jb, "enabled", vmTraceEnabled);
+		jb_raw(jb, ","); jb_int(jb, "totalCalls", vmTraceCount);
+		jb_raw(jb, ",\"calls\":[");
+		int startIdx = vmTraceHead - VMTRACE_RING_SIZE;
+		if (startIdx < 0) startIdx = 0;
+		int sinceId = cmd->hasIntArg1 ? cmd->intArg1 : startIdx;
+		if (sinceId < startIdx) sinceId = startIdx;
+
+		int first = 1;
+		int i;
+		for (i = sinceId; i < vmTraceHead; i++) {
+			vmTraceEntry_t *e = &vmTraceRing[i % VMTRACE_RING_SIZE];
+			if (!first) jb_raw(jb, ",");
+			first = 0;
+
+			const char *cmdName = "unknown";
+			switch(e->command) {
+				case 0: cmdName = "GAME_INIT"; break;
+				case 1: cmdName = "GAME_SHUTDOWN"; break;
+				case 2: cmdName = "GAME_CLIENT_CONNECT"; break;
+				case 3: cmdName = "GAME_CLIENT_BEGIN"; break;
+				case 4: cmdName = "GAME_CLIENT_USERINFO_CHANGED"; break;
+				case 5: cmdName = "GAME_CLIENT_DISCONNECT"; break;
+				case 6: cmdName = "GAME_CLIENT_COMMAND"; break;
+				case 7: cmdName = "GAME_CLIENT_THINK"; break;
+				case 8: cmdName = "GAME_RUN_FRAME"; break;
+				case 9: cmdName = "GAME_CONSOLE_COMMAND"; break;
+				case 10: cmdName = "BOTAI_START_FRAME"; break;
+			}
+			jb_raw(jb, "{");
+			jb_int(jb, "id", i);
+			jb_raw(jb, ","); jb_str(jb, "command", cmdName);
+			jb_raw(jb, ","); jb_int(jb, "commandId", e->command);
+			jb_raw(jb, ","); jb_int(jb, "serverTime", e->serverTime);
+			jb_raw(jb, ","); jb_int(jb, "durationUsec", e->durationUsec);
+			jb_raw(jb, "}");
+		}
+		jb_raw(jb, "]");
+	}
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// Memory stats
+// ------------------------------------------------------------------
+
+static void debug_cmd_memory(jsonBuf_t *jb) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "memory");
+	jb_raw(jb, ","); jb_int(jb, "hunkFreeBytes", Hunk_MemoryRemaining());
+	jb_raw(jb, ","); jb_int(jb, "gentitySize", sv.gentitySize);
+	jb_raw(jb, ","); jb_int(jb, "gameClientSize", sv.gameClientSize);
+	jb_raw(jb, ","); jb_int(jb, "numEntities", sv.num_entities);
+	jb_raw(jb, ","); jb_int(jb, "maxEntities", MAX_GENTITIES);
+	jb_raw(jb, ","); jb_int(jb, "maxClients", sv_maxclients ? sv_maxclients->integer : 0);
+	jb_raw(jb, ","); jb_int(jb, "numSnapshotEntities", svs.numSnapshotEntities);
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// Player state modification
+// ------------------------------------------------------------------
+
+static void debug_cmd_set_player(jsonBuf_t *jb, int num, const char *field, int value) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "set_player");
+
+	if (!sv.gameClients || num < 0 || num >= sv_maxclients->integer) {
+		jb_raw(jb, ","); jb_str(jb, "error", "invalid client number");
+		jb_raw(jb, "}\n");
+		return;
+	}
+	if (!field[0]) {
+		jb_raw(jb, ","); jb_str(jb, "error", "field name required");
+		jb_raw(jb, "}\n");
+		return;
+	}
+
+	playerState_t *ps = SV_GameClientNum(num);
+	int oldVal = 0;
+	qboolean found = qtrue;
+
+	if (!strcmp(field, "pm_type")) { oldVal = ps->pm_type; ps->pm_type = value; }
+	else if (!strcmp(field, "pm_flags")) { oldVal = ps->pm_flags; ps->pm_flags = value; }
+	else if (!strcmp(field, "gravity")) { oldVal = ps->gravity; ps->gravity = value; }
+	else if (!strcmp(field, "speed")) { oldVal = ps->speed; ps->speed = value; }
+	else if (!strcmp(field, "weapon")) { oldVal = ps->weapon; ps->weapon = value; }
+	else if (!strcmp(field, "weaponstate")) { oldVal = ps->weaponstate; ps->weaponstate = value; }
+	else if (!strcmp(field, "weaponTime")) { oldVal = ps->weaponTime; ps->weaponTime = value; }
+	else if (!strcmp(field, "viewheight")) { oldVal = ps->viewheight; ps->viewheight = value; }
+	else if (!strcmp(field, "eFlags")) { oldVal = ps->eFlags; ps->eFlags = value; }
+	else if (!strcmp(field, "groundEntityNum")) { oldVal = ps->groundEntityNum; ps->groundEntityNum = value; }
+	else if (!strcmp(field, "origin.x")) { oldVal = (int)ps->origin[0]; ps->origin[0] = (float)value; }
+	else if (!strcmp(field, "origin.y")) { oldVal = (int)ps->origin[1]; ps->origin[1] = (float)value; }
+	else if (!strcmp(field, "origin.z")) { oldVal = (int)ps->origin[2]; ps->origin[2] = (float)value; }
+	else if (!strcmp(field, "velocity.x")) { oldVal = (int)ps->velocity[0]; ps->velocity[0] = (float)value; }
+	else if (!strcmp(field, "velocity.y")) { oldVal = (int)ps->velocity[1]; ps->velocity[1] = (float)value; }
+	else if (!strcmp(field, "velocity.z")) { oldVal = (int)ps->velocity[2]; ps->velocity[2] = (float)value; }
+	else if (!strcmp(field, "viewangles.yaw")) { oldVal = (int)ps->viewangles[1]; ps->viewangles[1] = (float)value; }
+	else if (!strcmp(field, "viewangles.pitch")) { oldVal = (int)ps->viewangles[0]; ps->viewangles[0] = (float)value; }
+	else {
+		// stat/ammo/powerup by index: "stats.0" .. "stats.15", "ammo.0" .. "ammo.15", "powerups.0" ..
+		if (!strncmp(field, "stats.", 6)) {
+			int idx = atoi(field + 6);
+			if (idx >= 0 && idx < MAX_STATS) { oldVal = ps->stats[idx]; ps->stats[idx] = value; }
+			else found = qfalse;
+		} else if (!strncmp(field, "ammo.", 5)) {
+			int idx = atoi(field + 5);
+			if (idx >= 0 && idx < MAX_WEAPONS) { oldVal = ps->ammo[idx]; ps->ammo[idx] = value; }
+			else found = qfalse;
+		} else if (!strncmp(field, "persistant.", 11)) {
+			int idx = atoi(field + 11);
+			if (idx >= 0 && idx < MAX_PERSISTANT) { oldVal = ps->persistant[idx]; ps->persistant[idx] = value; }
+			else found = qfalse;
+		} else if (!strncmp(field, "powerups.", 9)) {
+			int idx = atoi(field + 9);
+			if (idx >= 0 && idx < MAX_POWERUPS) { oldVal = ps->powerups[idx]; ps->powerups[idx] = value; }
+			else found = qfalse;
+		} else {
+			found = qfalse;
+		}
+	}
+
+	if (!found) {
+		jb_raw(jb, ","); jb_str(jb, "error", "unknown field");
+		jb_raw(jb, ","); jb_str(jb, "field", field);
+		jb_raw(jb, ","); jb_str(jb, "available", "pm_type, pm_flags, gravity, speed, weapon, weaponstate, weaponTime, viewheight, eFlags, groundEntityNum, origin.x/y/z, velocity.x/y/z, viewangles.pitch/yaw, stats.N, ammo.N, persistant.N, powerups.N");
+		jb_raw(jb, "}\n");
+		return;
+	}
+
+	jb_raw(jb, ","); jb_int(jb, "num", num);
+	jb_raw(jb, ","); jb_str(jb, "field", field);
+	jb_raw(jb, ","); jb_int(jb, "oldValue", oldVal);
+	jb_raw(jb, ","); jb_int(jb, "newValue", value);
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// Time control — pause, step, timescale
+// ------------------------------------------------------------------
+
+static qboolean debugPaused = qfalse;
+static int      debugStepFrames = 0;
+
+qboolean DebugServer_IsPaused(void) {
+	if (debugStepFrames > 0) {
+		debugStepFrames--;
+		return qfalse;  // allow this frame
+	}
+	return debugPaused;
+}
+
+static void debug_cmd_time(jsonBuf_t *jb, const debugCmd_t *cmd) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "time_control");
+
+	if (!strcmp(cmd->strArg2, "pause")) {
+		debugPaused = qtrue;
+		debugStepFrames = 0;
+		jb_raw(jb, ","); jb_str(jb, "action", "paused");
+	} else if (!strcmp(cmd->strArg2, "resume")) {
+		debugPaused = qfalse;
+		debugStepFrames = 0;
+		jb_raw(jb, ","); jb_str(jb, "action", "resumed");
+	} else if (!strcmp(cmd->strArg2, "step")) {
+		int n = cmd->hasIntArg1 ? cmd->intArg1 : 1;
+		if (n < 1) n = 1;
+		debugStepFrames = n;
+		jb_raw(jb, ","); jb_str(jb, "action", "stepping");
+		jb_raw(jb, ","); jb_int(jb, "frames", n);
+	} else if (!strcmp(cmd->strArg2, "timescale")) {
+		if (cmd->hasIntArg1) {
+			// intArg1 is value * 100 to support fractional (e.g. 50 = 0.5x, 200 = 2x)
+			float ts = cmd->intArg1 / 100.0f;
+			if (ts < 0.01f) ts = 0.01f;
+			if (ts > 100.0f) ts = 100.0f;
+			Cvar_Set("timescale", va("%f", ts));
+			jb_raw(jb, ","); jb_str(jb, "action", "timescale_set");
+			jb_raw(jb, ","); jb_float(jb, "timescale", ts);
+		}
+	} else {
+		// status query
+		jb_raw(jb, ","); jb_bool(jb, "paused", debugPaused);
+		jb_raw(jb, ","); jb_int(jb, "stepFramesRemaining", debugStepFrames);
+		jb_raw(jb, ","); jb_float(jb, "timescale", com_timescale ? com_timescale->value : 1.0f);
+		jb_raw(jb, ","); jb_int(jb, "serverTime", sv.time);
+	}
+
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// Map list — query available BSPs from pk3 files
+// ------------------------------------------------------------------
+
+static void debug_cmd_maplist(jsonBuf_t *jb) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "maplist");
+
+	char listBuf[16384];
+	int nMaps = FS_GetFileList("maps", ".bsp", listBuf, sizeof(listBuf));
+
+	jb_raw(jb, ","); jb_int(jb, "count", nMaps);
+	jb_raw(jb, ",\"maps\":[");
+
+	const char *p = listBuf;
+	int first = 1;
+	int i;
+	for (i = 0; i < nMaps; i++) {
+		if (!first) jb_raw(jb, ",");
+		first = 0;
+		// strip .bsp extension
+		char name[MAX_QPATH];
+		Q_strncpyz(name, p, sizeof(name));
+		int len = strlen(name);
+		if (len > 4 && !Q_stricmp(name + len - 4, ".bsp")) {
+			name[len - 4] = '\0';
+		}
+		jb_printf(jb, "\"%s\"", name);
+		p += strlen(p) + 1;
+	}
+
+	jb_raw(jb, "]}\n");
+}
+
+// ------------------------------------------------------------------
+// Entity snapshot diff — capture state, compare later
+// ------------------------------------------------------------------
+
+#define SNAP_MAX_ENTS 1024
+
+typedef struct {
+	qboolean    valid;
+	int         serverTime;
+	int         numEntities;
+	struct {
+		int     number;
+		int     eType;
+		int     eFlags;
+		vec3_t  origin;
+		int     weapon;
+		int     modelindex;
+		int     svFlags;
+		int     contents;
+		qboolean linked;
+	} ents[SNAP_MAX_ENTS];
+} entitySnapshot_t;
+
+static entitySnapshot_t debugSnapshot;
+
+static void debug_capture_snapshot(void) {
+	debugSnapshot.valid = qtrue;
+	debugSnapshot.serverTime = sv.time;
+	debugSnapshot.numEntities = sv.num_entities;
+	int i;
+	for (i = 0; i < sv.num_entities && i < SNAP_MAX_ENTS; i++) {
+		sharedEntity_t *ent = SV_GentityNum(i);
+		debugSnapshot.ents[i].number = ent->s.number;
+		debugSnapshot.ents[i].eType = ent->s.eType;
+		debugSnapshot.ents[i].eFlags = ent->s.eFlags;
+		VectorCopy(ent->s.origin, debugSnapshot.ents[i].origin);
+		debugSnapshot.ents[i].weapon = ent->s.weapon;
+		debugSnapshot.ents[i].modelindex = ent->s.modelindex;
+		debugSnapshot.ents[i].svFlags = ent->r.svFlags;
+		debugSnapshot.ents[i].contents = ent->r.contents;
+		debugSnapshot.ents[i].linked = ent->r.linked;
+	}
+}
+
+static void debug_cmd_snapshot(jsonBuf_t *jb, const debugCmd_t *cmd) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "snapshot");
+
+	if (!strcmp(cmd->strArg2, "capture")) {
+		if (!sv.gentities) {
+			jb_raw(jb, ","); jb_str(jb, "error", "no entities loaded");
+			jb_raw(jb, "}\n");
+			return;
+		}
+		debug_capture_snapshot();
+		jb_raw(jb, ","); jb_str(jb, "action", "captured");
+		jb_raw(jb, ","); jb_int(jb, "serverTime", debugSnapshot.serverTime);
+		jb_raw(jb, ","); jb_int(jb, "numEntities", debugSnapshot.numEntities);
+	} else if (!strcmp(cmd->strArg2, "diff")) {
+		if (!debugSnapshot.valid) {
+			jb_raw(jb, ","); jb_str(jb, "error", "no snapshot captured. Use action 'capture' first.");
+			jb_raw(jb, "}\n");
+			return;
+		}
+		if (!sv.gentities) {
+			jb_raw(jb, ","); jb_str(jb, "error", "no entities loaded");
+			jb_raw(jb, "}\n");
+			return;
+		}
+
+		jb_raw(jb, ","); jb_int(jb, "snapshotTime", debugSnapshot.serverTime);
+		jb_raw(jb, ","); jb_int(jb, "currentTime", sv.time);
+		jb_raw(jb, ",\"changes\":[");
+
+		int first = 1;
+		int maxEnts = sv.num_entities;
+		if (debugSnapshot.numEntities > maxEnts) maxEnts = debugSnapshot.numEntities;
+		if (maxEnts > SNAP_MAX_ENTS) maxEnts = SNAP_MAX_ENTS;
+		int i;
+		for (i = 0; i < maxEnts; i++) {
+			sharedEntity_t *ent = (i < sv.num_entities) ? SV_GentityNum(i) : NULL;
+			int curType = ent ? ent->s.eType : 0;
+			int curFlags = ent ? ent->s.eFlags : 0;
+			int curWeapon = ent ? ent->s.weapon : 0;
+			int curModel = ent ? ent->s.modelindex : 0;
+			int curSvFlags = ent ? ent->r.svFlags : 0;
+			qboolean curLinked = ent ? ent->r.linked : qfalse;
+			vec3_t curOrigin;
+			if (ent) VectorCopy(ent->s.origin, curOrigin);
+			else VectorClear(curOrigin);
+
+			int oldType = (i < debugSnapshot.numEntities) ? debugSnapshot.ents[i].eType : 0;
+			int oldFlags = (i < debugSnapshot.numEntities) ? debugSnapshot.ents[i].eFlags : 0;
+			int oldWeapon = (i < debugSnapshot.numEntities) ? debugSnapshot.ents[i].weapon : 0;
+			int oldModel = (i < debugSnapshot.numEntities) ? debugSnapshot.ents[i].modelindex : 0;
+			int oldSvFlags = (i < debugSnapshot.numEntities) ? debugSnapshot.ents[i].svFlags : 0;
+			qboolean oldLinked = (i < debugSnapshot.numEntities) ? debugSnapshot.ents[i].linked : qfalse;
+			vec3_t oldOrigin;
+			if (i < debugSnapshot.numEntities) VectorCopy(debugSnapshot.ents[i].origin, oldOrigin);
+			else VectorClear(oldOrigin);
+
+			qboolean changed = qfalse;
+			if (curType != oldType || curFlags != oldFlags || curWeapon != oldWeapon ||
+				curModel != oldModel || curSvFlags != oldSvFlags || curLinked != oldLinked) {
+				changed = qtrue;
+			}
+			// Check origin with tolerance
+			float dx = curOrigin[0] - oldOrigin[0];
+			float dy = curOrigin[1] - oldOrigin[1];
+			float dz = curOrigin[2] - oldOrigin[2];
+			if (dx*dx + dy*dy + dz*dz > 1.0f) changed = qtrue;
+
+			if (changed) {
+				if (!first) jb_raw(jb, ",");
+				first = 0;
+				jb_raw(jb, "{");
+				jb_int(jb, "num", i);
+				if (curType != oldType) { jb_raw(jb, ",\"eType\":{"); jb_int(jb, "old", oldType); jb_raw(jb, ","); jb_int(jb, "new", curType); jb_raw(jb, "}"); }
+				if (curFlags != oldFlags) { jb_raw(jb, ",\"eFlags\":{"); jb_int(jb, "old", oldFlags); jb_raw(jb, ","); jb_int(jb, "new", curFlags); jb_raw(jb, "}"); }
+				if (curWeapon != oldWeapon) { jb_raw(jb, ",\"weapon\":{"); jb_int(jb, "old", oldWeapon); jb_raw(jb, ","); jb_int(jb, "new", curWeapon); jb_raw(jb, "}"); }
+				if (curModel != oldModel) { jb_raw(jb, ",\"modelindex\":{"); jb_int(jb, "old", oldModel); jb_raw(jb, ","); jb_int(jb, "new", curModel); jb_raw(jb, "}"); }
+				if (curLinked != oldLinked) { jb_raw(jb, ",\"linked\":{"); jb_bool(jb, "old", oldLinked); jb_raw(jb, ","); jb_bool(jb, "new", curLinked); jb_raw(jb, "}"); }
+				if (dx*dx + dy*dy + dz*dz > 1.0f) {
+					jb_raw(jb, ",\"origin\":{");
+					jb_vec3(jb, "old", oldOrigin);
+					jb_raw(jb, ","); jb_vec3(jb, "new", curOrigin);
+					jb_raw(jb, "}");
+				}
+				jb_raw(jb, "}");
+			}
+		}
+		jb_raw(jb, "]");
+	} else {
+		// Status
+		jb_raw(jb, ","); jb_bool(jb, "hasSnapshot", debugSnapshot.valid);
+		if (debugSnapshot.valid) {
+			jb_raw(jb, ","); jb_int(jb, "snapshotTime", debugSnapshot.serverTime);
+			jb_raw(jb, ","); jb_int(jb, "snapshotEntities", debugSnapshot.numEntities);
+		}
+		jb_raw(jb, ","); jb_int(jb, "currentTime", sv.time);
+		jb_raw(jb, ","); jb_int(jb, "currentEntities", sv.num_entities);
+	}
+
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// Raw memory peek — read bytes from game module entity data
+// ------------------------------------------------------------------
+
+static void debug_cmd_peek(jsonBuf_t *jb, int entNum, int offset, int length) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "peek");
+
+	if (!sv.gentities) {
+		jb_raw(jb, ","); jb_str(jb, "error", "no entities loaded");
+		jb_raw(jb, "}\n");
+		return;
+	}
+	if (entNum < 0 || entNum >= sv.num_entities) {
+		jb_raw(jb, ","); jb_str(jb, "error", "invalid entity number");
+		jb_raw(jb, "}\n");
+		return;
+	}
+	if (offset < 0 || offset >= sv.gentitySize) {
+		jb_raw(jb, ","); jb_str(jb, "error", "offset out of range");
+		jb_raw(jb, ","); jb_int(jb, "gentitySize", sv.gentitySize);
+		jb_raw(jb, "}\n");
+		return;
+	}
+	if (length <= 0) length = 64;
+	if (length > 512) length = 512;
+	if (offset + length > sv.gentitySize) length = sv.gentitySize - offset;
+
+	byte *base = (byte*)sv.gentities + sv.gentitySize * entNum;
+
+	jb_raw(jb, ","); jb_int(jb, "entNum", entNum);
+	jb_raw(jb, ","); jb_int(jb, "offset", offset);
+	jb_raw(jb, ","); jb_int(jb, "length", length);
+	jb_raw(jb, ","); jb_int(jb, "gentitySize", sv.gentitySize);
+	jb_raw(jb, ","); jb_int(jb, "sharedEntitySize", (int)sizeof(sharedEntity_t));
+
+	// Hex dump
+	jb_raw(jb, ",\"hex\":\"");
+	int i;
+	for (i = 0; i < length; i++) {
+		jb_printf(jb, "%02x", base[offset + i]);
+	}
+	jb_raw(jb, "\"");
+
+	// Also as int32 array for easier reading
+	jb_raw(jb, ",\"int32s\":[");
+	int numInts = length / 4;
+	for (i = 0; i < numInts; i++) {
+		if (i) jb_raw(jb, ",");
+		int val;
+		memcpy(&val, base + offset + i * 4, 4);
+		jb_printf(jb, "%d", val);
+	}
+	jb_raw(jb, "]");
+
+	// Float interpretation too
+	jb_raw(jb, ",\"floats\":[");
+	for (i = 0; i < numInts; i++) {
+		if (i) jb_raw(jb, ",");
+		float val;
+		memcpy(&val, base + offset + i * 4, 4);
+		if (IS_NAN(val) || IS_INF(val)) jb_raw(jb, "null");
+		else jb_printf(jb, "%.4f", val);
+	}
+	jb_raw(jb, "]");
+
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
+// Point contents query
+// ------------------------------------------------------------------
+
+static void debug_cmd_point_contents(jsonBuf_t *jb, const debugCmd_t *cmd) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "point_contents");
+
+	vec3_t point = {0,0,0};
+	sscanf(cmd->strArg1, "%f,%f,%f", &point[0], &point[1], &point[2]);
+
+	int contents = SV_PointContents(point, ENTITYNUM_NONE);
+
+	jb_raw(jb, ","); jb_vec3(jb, "point", point);
+	jb_raw(jb, ","); jb_int(jb, "contents", contents);
+
+	// Decode content flags
+	jb_raw(jb, ",\"decoded\":[");
+	int flagFirst = 1;
+	#define CFLAG(bit, name) if (contents & (bit)) { if (!flagFirst) jb_raw(jb, ","); jb_printf(jb, "\"%s\"", name); flagFirst = 0; }
+	CFLAG(1, "SOLID")
+	CFLAG(8, "LAVA")
+	CFLAG(16, "SLIME")
+	CFLAG(32, "WATER")
+	CFLAG(0x8000, "AREAPORTAL")
+	CFLAG(0x10000, "PLAYERCLIP")
+	CFLAG(0x20000, "MONSTERCLIP")
+	CFLAG(0x2000000, "BODY")
+	CFLAG(0x4000000, "CORPSE")
+	CFLAG(0x8000000, "DETAIL")
+	CFLAG(0x10000000, "STRUCTURAL")
+	CFLAG(0x40000000, "TRIGGER")
+	#undef CFLAG
+	jb_raw(jb, "]");
+
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
 // Command dispatch
 // ------------------------------------------------------------------
 
@@ -1069,6 +2084,36 @@ static void debug_handle_command(debugClient_t *client, const char *json) {
 			jb_str(&jb, "error", "exec requires a command string in 'str1'");
 			jb_raw(&jb, "}\n");
 		}
+	} else if (!strcmp(cmd.cmd, "cvarlist")) {
+		debug_cmd_cvarlist(&jb, cmd.strArg1);
+	} else if (!strcmp(cmd.cmd, "configstrings")) {
+		debug_cmd_configstrings(&jb, cmd.intArg1, cmd.hasIntArg2 ? cmd.intArg2 : 0);
+	} else if (!strcmp(cmd.cmd, "log")) {
+		debug_cmd_log(&jb, cmd.intArg1, cmd.hasIntArg2 ? cmd.intArg2 : 100, cmd.strArg1);
+	} else if (!strcmp(cmd.cmd, "set_entity")) {
+		debug_cmd_set_entity(&jb, cmd.intArg1, cmd.strArg1, cmd.intArg2);
+	} else if (!strcmp(cmd.cmd, "trace")) {
+		debug_cmd_trace(&jb, &cmd);
+	} else if (!strcmp(cmd.cmd, "entities_in_box")) {
+		debug_cmd_entities_in_box(&jb, &cmd);
+	} else if (!strcmp(cmd.cmd, "watch")) {
+		debug_cmd_watch(&jb, &cmd);
+	} else if (!strcmp(cmd.cmd, "vmtrace")) {
+		debug_cmd_vmtrace(&jb, &cmd);
+	} else if (!strcmp(cmd.cmd, "memory")) {
+		debug_cmd_memory(&jb);
+	} else if (!strcmp(cmd.cmd, "set_player")) {
+		debug_cmd_set_player(&jb, cmd.intArg1, cmd.strArg1, cmd.intArg2);
+	} else if (!strcmp(cmd.cmd, "time")) {
+		debug_cmd_time(&jb, &cmd);
+	} else if (!strcmp(cmd.cmd, "maplist")) {
+		debug_cmd_maplist(&jb);
+	} else if (!strcmp(cmd.cmd, "snapshot")) {
+		debug_cmd_snapshot(&jb, &cmd);
+	} else if (!strcmp(cmd.cmd, "peek")) {
+		debug_cmd_peek(&jb, cmd.intArg1, cmd.hasIntArg2 ? cmd.intArg2 : 0, 64);
+	} else if (!strcmp(cmd.cmd, "point_contents")) {
+		debug_cmd_point_contents(&jb, &cmd);
 	} else if (!strcmp(cmd.cmd, "ping")) {
 		jb_raw(&jb, "{\"type\":\"pong\"}\n");
 	} else {
@@ -1077,7 +2122,7 @@ static void debug_handle_command(debugClient_t *client, const char *json) {
 		jb_raw(&jb, ",");
 		jb_str(&jb, "error", "unknown command");
 		jb_raw(&jb, ",");
-		jb_str(&jb, "available", "status, entity, entities, player, layout, validate, search, cvar, exec, ping");
+		jb_str(&jb, "available", "status, entity, entities, player, layout, validate, search, cvar, cvarlist, configstrings, log, exec, set_entity, set_player, trace, entities_in_box, watch, vmtrace, memory, time, maplist, snapshot, peek, point_contents, ping");
 		jb_raw(&jb, "}\n");
 	}
 

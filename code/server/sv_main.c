@@ -1156,13 +1156,24 @@ void SV_Frame( int msec ) {
 	if (com_dedicated->integer) SV_BotFrame (sv.time);
 
 	// run the game simulation in chunks
+	// (debug server can pause the game loop while still processing inspection commands)
 	while ( sv.timeResidual >= frameMsec ) {
+		if (DebugServer_IsPaused()) {
+			// Don't advance time — just drain the residual to prevent
+			// a burst of catch-up frames when we unpause
+			break;
+		}
 		sv.timeResidual -= frameMsec;
 		svs.time += frameMsec;
 		sv.time += frameMsec;
 
 		// let everything in the world think and move
-		VM_Call (gvm, GAME_RUN_FRAME, sv.time);
+		{
+			int vmStart = Sys_Milliseconds();
+			VM_Call (gvm, GAME_RUN_FRAME, sv.time);
+			DebugServer_TraceVMCall(GAME_RUN_FRAME, sv.time,
+				(Sys_Milliseconds() - vmStart) * 1000);
+		}
 	}
 
 	if ( com_speeds->integer ) {

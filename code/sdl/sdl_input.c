@@ -191,12 +191,50 @@ static keyNum_t IN_TranslateSDLToQ3Key( SDL_Keysym *keysym, qboolean down )
 {
 	keyNum_t key = 0;
 
-	if( keysym->sym >= SDLK_SPACE && keysym->sym < SDLK_DELETE )
+	if( keysym->scancode >= SDL_SCANCODE_1 && keysym->scancode <= SDL_SCANCODE_0 )
+	{
+		// The engine stores number-row binds as ASCII digits. Prefer the physical
+		// scancode so they stay stable across keyboard layouts and Fn overlays.
+		if( keysym->scancode == SDL_SCANCODE_0 )
+			key = '0';
+		else
+			key = '1' + keysym->scancode - SDL_SCANCODE_1;
+	}
+	else if( keysym->scancode >= SDL_SCANCODE_A && keysym->scancode <= SDL_SCANCODE_Z )
+	{
+		// Normal movement binds expect lower-case ASCII letters, not layout-specific
+		// SDL keycodes. Scancodes keep WASD on the physical keys users expect.
+		key = 'a' + keysym->scancode - SDL_SCANCODE_A;
+	}
+	else
+	{
+		switch( keysym->scancode )
+		{
+			case SDL_SCANCODE_PAGEUP:     key = K_PGUP;       break;
+			case SDL_SCANCODE_PAGEDOWN:   key = K_PGDN;       break;
+			case SDL_SCANCODE_HOME:       key = K_HOME;       break;
+			case SDL_SCANCODE_END:        key = K_END;        break;
+			case SDL_SCANCODE_LEFT:       key = K_LEFTARROW;  break;
+			case SDL_SCANCODE_RIGHT:      key = K_RIGHTARROW; break;
+			case SDL_SCANCODE_DOWN:       key = K_DOWNARROW;  break;
+			case SDL_SCANCODE_UP:         key = K_UPARROW;    break;
+			case SDL_SCANCODE_ESCAPE:     key = K_ESCAPE;     break;
+			case SDL_SCANCODE_RETURN:     key = K_ENTER;      break;
+			case SDL_SCANCODE_TAB:        key = K_TAB;        break;
+			case SDL_SCANCODE_BACKSPACE:  key = K_BACKSPACE;  break;
+			case SDL_SCANCODE_DELETE:     key = K_DEL;        break;
+			case SDL_SCANCODE_INSERT:     key = K_INS;        break;
+			default:
+				break;
+		}
+	}
+
+	if( !key && keysym->sym >= SDLK_SPACE && keysym->sym < SDLK_DELETE )
 	{
 		// These happen to match the ASCII chars
 		key = (int)keysym->sym;
 	}
-	else
+	else if( !key )
 	{
 		switch( keysym->sym )
 		{
