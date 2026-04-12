@@ -83,9 +83,11 @@ int trap_FS_GetFileList(  const char *path, const char *extension, char *listbuf
 	return syscall( G_FS_GETFILELIST, path, extension, listbuf, bufsize );
 }
 
+#ifndef ELITEFORCE
 int trap_FS_Seek( fileHandle_t f, long offset, int origin ) {
 	return syscall( G_FS_SEEK, f, offset, origin );
 }
+#endif
 
 void	trap_SendConsoleCommand( int exec_when, const char *text ) {
 	syscall( G_SEND_CONSOLE_COMMAND, exec_when, text );
@@ -153,9 +155,11 @@ void trap_Trace( trace_t *results, const vec3_t start, const vec3_t mins, const 
 	syscall( G_TRACE, results, start, mins, maxs, end, passEntityNum, contentmask );
 }
 
+#ifndef ELITEFORCE
 void trap_TraceCapsule( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask ) {
 	syscall( G_TRACECAPSULE, results, start, mins, maxs, end, passEntityNum, contentmask );
 }
+#endif
 
 int trap_PointContents( const vec3_t point, int passEntityNum ) {
 	return syscall( G_POINT_CONTENTS, point, passEntityNum );
@@ -194,9 +198,11 @@ qboolean trap_EntityContact( const vec3_t mins, const vec3_t maxs, const gentity
 	return syscall( G_ENTITY_CONTACT, mins, maxs, ent );
 }
 
+#ifndef ELITEFORCE
 qboolean trap_EntityContactCapsule( const vec3_t mins, const vec3_t maxs, const gentity_t *ent ) {
 	return syscall( G_ENTITY_CONTACTCAPSULE, mins, maxs, ent );
 }
+#endif
 
 int trap_BotAllocateClient( void ) {
 	return syscall( G_BOT_ALLOCATE_CLIENT );
@@ -222,13 +228,23 @@ void trap_DebugPolygonDelete(int id) {
 	syscall( G_DEBUG_POLYGON_DELETE, id );
 }
 
+#ifndef ELITEFORCE
 int trap_RealTime( qtime_t *qtime ) {
 	return syscall( G_REAL_TIME, qtime );
 }
+#endif
 
+#ifndef ELITEFORCE
 void trap_SnapVector( float *v ) {
 	syscall( G_SNAPVECTOR, v );
 }
+#else
+void trap_SnapVector( float *v ) {
+	v[0] = (int)v[0];
+	v[1] = (int)v[1];
+	v[2] = (int)v[2];
+}
+#endif
 
 // BotLib traps start here
 int trap_BotLibSetup( void ) {
@@ -247,9 +263,11 @@ int trap_BotLibVarGet(char *var_name, char *value, int size) {
 	return syscall( BOTLIB_LIBVAR_GET, var_name, value, size );
 }
 
+#ifndef ELITEFORCE
 int trap_BotLibDefine(char *string) {
 	return syscall( BOTLIB_PC_ADD_GLOBAL_DEFINE, string );
 }
+#endif
 
 int trap_BotLibStartFrame(float time) {
 	return syscall( BOTLIB_START_FRAME, PASSFLOAT( time ) );
@@ -301,21 +319,31 @@ int trap_AAS_PointAreaNum(vec3_t point) {
 	return syscall( BOTLIB_AAS_POINT_AREA_NUM, point );
 }
 
+#ifndef ELITEFORCE
 int trap_AAS_PointReachabilityAreaIndex(vec3_t point) {
 	return syscall( BOTLIB_AAS_POINT_REACHABILITY_AREA_INDEX, point );
 }
+#endif
 
 int trap_AAS_TraceAreas(vec3_t start, vec3_t end, int *areas, vec3_t *points, int maxareas) {
 	return syscall( BOTLIB_AAS_TRACE_AREAS, start, end, areas, points, maxareas );
 }
 
+#ifndef ELITEFORCE
 int trap_AAS_BBoxAreas(vec3_t absmins, vec3_t absmaxs, int *areas, int maxareas) {
 	return syscall( BOTLIB_AAS_BBOX_AREAS, absmins, absmaxs, areas, maxareas );
 }
+#else
+int trap_AAS_BBoxAreas(vec3_t absmins, vec3_t absmaxs, int *areas, int maxareas) { return 0; }
+#endif
 
+#ifndef ELITEFORCE
 int trap_AAS_AreaInfo( int areanum, void /* struct aas_areainfo_s */ *info ) {
 	return syscall( BOTLIB_AAS_AREA_INFO, areanum, info );
 }
+#else
+int trap_AAS_AreaInfo( int areanum, void *info ) { return 0; }
+#endif
 
 int trap_AAS_PointContents(vec3_t point) {
 	return syscall( BOTLIB_AAS_POINT_CONTENTS, point );
@@ -349,21 +377,31 @@ int trap_AAS_AreaTravelTimeToGoalArea(int areanum, vec3_t origin, int goalareanu
 	return syscall( BOTLIB_AAS_AREA_TRAVEL_TIME_TO_GOAL_AREA, areanum, origin, goalareanum, travelflags );
 }
 
+#ifndef ELITEFORCE
 int trap_AAS_EnableRoutingArea( int areanum, int enable ) {
 	return syscall( BOTLIB_AAS_ENABLE_ROUTING_AREA, areanum, enable );
 }
+#else
+int trap_AAS_EnableRoutingArea( int areanum, int enable ) { return 0; }
+#endif
 
+#ifndef ELITEFORCE
 int trap_AAS_PredictRoute(void /*struct aas_predictroute_s*/ *route, int areanum, vec3_t origin,
 							int goalareanum, int travelflags, int maxareas, int maxtime,
 							int stopevent, int stopcontents, int stoptfl, int stopareanum) {
 	return syscall( BOTLIB_AAS_PREDICT_ROUTE, route, areanum, origin, goalareanum, travelflags, maxareas, maxtime, stopevent, stopcontents, stoptfl, stopareanum );
 }
+#else
+int trap_AAS_PredictRoute(void *route, int areanum, vec3_t origin, int goalareanum, int travelflags, int maxareas, int maxtime, int stopevent, int stopcontents, int stoptfl, int stopareanum) { return 0; }
+#endif
 
+#ifndef ELITEFORCE
 int trap_AAS_AlternativeRouteGoals(vec3_t start, int startareanum, vec3_t goal, int goalareanum, int travelflags,
 										void /*struct aas_altroutegoal_s*/ *altroutegoals, int maxaltroutegoals,
 										int type) {
 	return syscall( BOTLIB_AAS_ALTERNATIVE_ROUTE_GOAL, start, startareanum, goal, goalareanum, travelflags, altroutegoals, maxaltroutegoals, type );
 }
+#endif
 
 int trap_AAS_Swimming(vec3_t origin) {
 	return syscall( BOTLIB_AAS_SWIMMING, origin );
@@ -385,9 +423,13 @@ void trap_EA_Command(int client, char *command) {
 	syscall( BOTLIB_EA_COMMAND, client, command );
 }
 
+#ifndef ELITEFORCE
 void trap_EA_Action(int client, int action) {
 	syscall( BOTLIB_EA_ACTION, client, action );
 }
+#else
+void trap_EA_Action(int client, int action) { }
+#endif
 
 void trap_EA_Gesture(int client) {
 	syscall( BOTLIB_EA_GESTURE, client );
@@ -659,9 +701,13 @@ float trap_BotAvoidGoalTime(int goalstate, int number) {
 	return fi.f;
 }
 
+#ifndef ELITEFORCE
 void trap_BotSetAvoidGoalTime(int goalstate, int number, float avoidtime) {
 	syscall( BOTLIB_AI_SET_AVOID_GOAL_TIME, goalstate, number, PASSFLOAT(avoidtime));
 }
+#else
+void trap_BotSetAvoidGoalTime(int goalstate, int number, float avoidtime) { }
+#endif
 
 void trap_BotInitLevelItems(void) {
 	syscall( BOTLIB_AI_INIT_LEVEL_ITEMS );
@@ -703,9 +749,13 @@ void trap_BotResetMoveState(int movestate) {
 	syscall( BOTLIB_AI_RESET_MOVE_STATE, movestate );
 }
 
+#ifndef ELITEFORCE
 void trap_BotAddAvoidSpot(int movestate, vec3_t origin, float radius, int type) {
 	syscall( BOTLIB_AI_ADD_AVOID_SPOT, movestate, origin, PASSFLOAT(radius), type);
 }
+#else
+void trap_BotAddAvoidSpot(int movestate, vec3_t origin, float radius, int type) { }
+#endif
 
 void trap_BotMoveToGoal(void /* struct bot_moveresult_s */ *result, int movestate, void /* struct bot_goal_s */ *goal, int travelflags) {
 	syscall( BOTLIB_AI_MOVE_TO_GOAL, result, movestate, goal, travelflags );
@@ -775,6 +825,7 @@ int trap_GeneticParentsAndChildSelection(int numranks, float *ranks, int *parent
 	return syscall( BOTLIB_AI_GENETIC_PARENTS_AND_CHILD_SELECTION, numranks, ranks, parent1, parent2, child );
 }
 
+#ifndef ELITEFORCE
 int trap_PC_LoadSource( const char *filename ) {
 	return syscall( BOTLIB_PC_LOAD_SOURCE, filename );
 }
@@ -790,3 +841,4 @@ int trap_PC_ReadToken( int handle, pc_token_t *pc_token ) {
 int trap_PC_SourceFileAndLine( int handle, char *filename, int *line ) {
 	return syscall( BOTLIB_PC_SOURCE_FILE_AND_LINE, handle, filename, line );
 }
+#endif

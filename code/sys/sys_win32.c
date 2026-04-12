@@ -90,7 +90,8 @@ Sys_DefaultHomePath
 char *Sys_DefaultHomePath( void )
 {
 	TCHAR szPath[MAX_PATH];
-	FARPROC qSHGetFolderPath;
+	typedef HRESULT (WINAPI *pfnSHGetFolderPath)(HWND, int, HANDLE, DWORD, LPTSTR);
+	pfnSHGetFolderPath qSHGetFolderPath;
 	HMODULE shfolder = LoadLibrary("shfolder.dll");
 
 	if(shfolder == NULL)
@@ -101,7 +102,7 @@ char *Sys_DefaultHomePath( void )
 
 	if(!*homePath && com_homepath)
 	{
-		qSHGetFolderPath = GetProcAddress(shfolder, "SHGetFolderPathA");
+		qSHGetFolderPath = (pfnSHGetFolderPath)GetProcAddress(shfolder, "SHGetFolderPathA");
 		if(qSHGetFolderPath == NULL)
 		{
 			Com_Printf("Unable to find SHGetFolderPath in SHFolder.dll\n");

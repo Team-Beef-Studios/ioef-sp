@@ -1172,6 +1172,9 @@ void SV_Frame( int msec ) {
 	// check timeouts
 	SV_CheckTimeouts();
 
+	// process debug inspection server
+	DebugServer_Frame();
+
 	// send messages back to the clients
 	SV_SendClientMessages();
 

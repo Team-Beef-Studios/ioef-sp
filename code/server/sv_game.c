@@ -894,6 +894,14 @@ void SV_ShutdownGameProgs( void ) {
 	if ( !gvm ) {
 		return;
 	}
+#ifdef ELITEFORCE
+	if ( SV_SP_IsActive() ) {
+		SV_SP_ShutdownGameProgs();
+		VM_Free( gvm );
+		gvm = NULL;
+		return;
+	}
+#endif
 	VM_Call( gvm, GAME_SHUTDOWN, qfalse );
 	VM_Free( gvm );
 	gvm = NULL;
@@ -961,6 +969,23 @@ void SV_InitGameProgs( void ) {
 	cvar_t	*var;
 	//FIXME these are temp while I make bots run in vm
 	extern int	bot_enable;
+
+#ifdef ELITEFORCE
+	// Check if we should load the SP game module
+	if ( Cvar_VariableIntegerValue( "sp_game" ) ) {
+		bot_enable = 0;
+		// SP mode doesn't need pure server checks
+		Cvar_Set( "sv_pure", "0" );
+		SV_SP_InitGameProgs();
+		// Create a minimal VM wrapper so existing VM_Call sites work
+		gvm = VM_CreateFakeWithSyscall( "qagame_sp", SV_SP_GameVmMain, SV_GameSystemCalls );
+		if ( !gvm ) {
+			Com_Error( ERR_FATAL, "VM_CreateFake for SP game failed" );
+		}
+		SV_InitGameVM( qfalse );
+		return;
+	}
+#endif
 
 	var = Cvar_Get( "bot_enable", "1", CVAR_LATCH );
 	if ( var ) {

@@ -656,6 +656,7 @@ static void PM_AirMove( void ) {
 	PM_StepSlideMove ( qtrue );
 }
 
+#ifndef ELITEFORCE
 /*
 ===================
 PM_GrappleMove
@@ -681,6 +682,7 @@ static void PM_GrappleMove( void ) {
 
 	pml.groundPlane = qfalse;
 }
+#endif
 
 /*
 ===================
@@ -1975,10 +1977,12 @@ void PmoveSingle (pmove_t *pmove) {
 	if ( pm->ps->powerups[PW_FLIGHT] ) {
 		// flight powerup doesn't allow jump and has different friction
 		PM_FlyMove();
+#ifndef ELITEFORCE
 	} else if (pm->ps->pm_flags & PMF_GRAPPLE_PULL) {
 		PM_GrappleMove();
 		// We can wiggle a bit
 		PM_AirMove();
+#endif
 	} else if (pm->ps->pm_flags & PMF_TIME_WATERJUMP) {
 		PM_WaterJumpMove();
 	} else if ( pm->waterlevel > 1 ) {
@@ -2035,7 +2039,9 @@ void Pmove (pmove_t *pmove) {
 		pmove->ps->commandTime = finalTime - 1000;
 	}
 
+#ifndef ELITEFORCE
 	pmove->ps->pmove_framecount = (pmove->ps->pmove_framecount+1) & ((1<<PS_PMOVEFRAMECOUNTBITS)-1);
+#endif
 
 	// chop the move up if it is too long, to prevent framerate
 	// dependent behavior

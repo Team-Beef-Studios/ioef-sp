@@ -576,7 +576,7 @@ int LAN_GetServerStatus( char *serverAddress, char *serverStatus, int maxLen ) {
 CL_GetGlConfig
 ====================
 */
-static void CL_GetGlconfig( glconfig_t *config ) {
+static void UI_GetGlconfig( glconfig_t *config ) {
 	*config = cls.glconfig;
 }
 
@@ -908,7 +908,7 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;		
 
 	case UI_GETGLCONFIG:
-		CL_GetGlconfig( VMA(1) );
+		UI_GetGlconfig( VMA(1) );
 		return 0;
 
 	case UI_GETCONFIGSTRING:
@@ -1116,6 +1116,14 @@ void CL_ShutdownUI( void ) {
 	if ( !uivm ) {
 		return;
 	}
+#ifdef ELITEFORCE
+	if ( CL_SP_IsUIActive() ) {
+		CL_SP_ShutdownUI();
+		VM_Free( uivm );
+		uivm = NULL;
+		return;
+	}
+#endif
 	VM_Call( uivm, UI_SHUTDOWN );
 	VM_Free( uivm );
 	uivm = NULL;
@@ -1131,6 +1139,21 @@ CL_InitUI
 void CL_InitUI( void ) {
 	int		v;
 	vmInterpret_t		interpret;
+
+#ifdef ELITEFORCE
+	if ( Cvar_VariableIntegerValue( "sp_game" ) ) {
+		// SP mode: load UI via GetUIAPI from efuix86.dll
+		CL_SP_InitUI();
+		uivm = VM_CreateFake( "efui_sp", CL_SP_UIVmMain );
+		if ( !uivm ) {
+			Com_Error( ERR_FATAL, "VM_CreateFake for SP UI failed" );
+		}
+		// SP UI doesn't use GETAPIVERSION, go straight to init
+		VM_Call( uivm, UI_INIT, (clc.state >= CA_AUTHORIZING && clc.state < CA_ACTIVE) );
+		Cvar_SetValue( "ui_cdkeychecked2", 1 );
+		return;
+	}
+#endif
 
 	// load the dll or bytecode
 	interpret = Cvar_VariableValue("vm_ui");

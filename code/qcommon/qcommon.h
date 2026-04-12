@@ -399,9 +399,16 @@ typedef enum {
 } sharedTraps_t;
 
 void	VM_Init( void );
-vm_t	*VM_Create( const char *module, intptr_t (*systemCalls)(intptr_t *), 
+vm_t	*VM_Create( const char *module, intptr_t (*systemCalls)(intptr_t *),
 				   vmInterpret_t interpret );
 // module should be bare: "cgame", not "cgame.dll" or "vm/cgame.qvm"
+#ifdef ELITEFORCE
+vm_t	*VM_CreateFake( const char *module, intptr_t (QDECL *entryPoint)( int callNum, ... ) );
+vm_t	*VM_CreateFakeWithSyscall( const char *module,
+			intptr_t (QDECL *entryPoint)( int callNum, ... ),
+			intptr_t (*systemCalls)( intptr_t *parms ) );
+#endif
+intptr_t QDECL VM_DllSyscall( intptr_t arg, ... );
 
 void	VM_Free( vm_t *vm );
 void	VM_Clear(void);

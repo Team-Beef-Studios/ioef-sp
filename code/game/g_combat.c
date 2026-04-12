@@ -399,6 +399,7 @@ CheckAlmostScored
 ==================
 */
 void CheckAlmostScored( gentity_t *self, gentity_t *attacker ) {
+#ifndef ELITEFORCE
 	gentity_t	*ent;
 	vec3_t		dir;
 	char		*classname;
@@ -424,6 +425,7 @@ void CheckAlmostScored( gentity_t *self, gentity_t *attacker ) {
 			}
 		}
 	}
+#endif
 }
 
 /*

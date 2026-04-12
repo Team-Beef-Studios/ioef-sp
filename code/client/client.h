@@ -609,6 +609,22 @@ void CL_CGameRendering( stereoFrame_t stereo );
 void CL_SetCGameTime( void );
 void CL_FirstSnapshot( void );
 void CL_ShaderStateChanged(void);
+void CL_GetGameState( gameState_t *gs );
+void CL_GetGlconfig( glconfig_t *glconfig );
+qboolean CL_GetUserCmd( int cmdNumber, usercmd_t *ucmd );
+int CL_GetCurrentCmdNumber( void );
+void CL_GetCurrentSnapshotNumber( int *snapshotNumber, int *serverTime );
+qboolean CL_GetSnapshot( int snapshotNumber, snapshot_t *snapshot );
+void CL_SetUserCmdValue( int userCmdValue, float sensitivityScale );
+void CL_AddCgameCommand( const char *cmdName );
+qboolean CL_GetServerCommand( int serverCommandNumber );
+
+//
+// cl_cgame_sp.c
+//
+#ifdef ELITEFORCE
+intptr_t CL_SPCgameSystemCalls(intptr_t *args);
+#endif
 
 //
 // cl_ui.c
@@ -619,6 +635,16 @@ int Key_GetCatcher( void );
 void Key_SetCatcher( int catcher );
 void LAN_LoadCachedServers( void );
 void LAN_SaveServersToCache( void );
+
+//
+// cl_ui_sp.c
+//
+#ifdef ELITEFORCE
+void CL_SP_InitUI( void );
+void CL_SP_ShutdownUI( void );
+qboolean CL_SP_IsUIActive( void );
+intptr_t QDECL CL_SP_UIVmMain( int command, ... );
+#endif
 
 
 //

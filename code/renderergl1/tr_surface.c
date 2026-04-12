@@ -160,8 +160,8 @@ static void RB_SurfaceSprite( void ) {
 
 	// calculate the xyz locations for the four corners
 	#ifdef ELITEFORCE
-	radius = backEnd.currentEntity->e.data.sprite.radius;
-	rotation = backEnd.currentEntity->e.data.sprite.rotation;
+	radius = backEnd.currentEntity->e.radius;
+	rotation = backEnd.currentEntity->e.rotation;
 	#else
 	radius = backEnd.currentEntity->e.radius;
 	rotation = backEnd.currentEntity->e.rotation;
@@ -573,8 +573,8 @@ static void RB_SurfaceOrientedSprite( void )
 	float		rotation;
 
 	// calculate the xyz locations for the four corners
-	radius = backEnd.currentEntity->e.data.sprite.radius;
-	rotation = backEnd.currentEntity->e.data.sprite.rotation;
+	radius = backEnd.currentEntity->e.radius;
+	rotation = backEnd.currentEntity->e.rotation;
 
 	if (rotation == 0)
 	{

@@ -1190,9 +1190,9 @@ void R_Init( void ) {
 	Com_Memset( &tess, 0, sizeof( tess ) );
 
 #ifdef ELITEFORCE
-	if(sizeof(glconfig_t) != 5192)
+	if(sizeof(glconfig_t) != 5196)
 	{
-		ri.Error( ERR_FATAL, "Mod ABI incompatible: sizeof(glconfig_t) == %u != 5192", (unsigned int) sizeof(glconfig_t));
+		ri.Error( ERR_FATAL, "Mod ABI incompatible: sizeof(glconfig_t) == %u != 5196", (unsigned int) sizeof(glconfig_t));
 	}
 #else
 	if(sizeof(glconfig_t) != 11332)

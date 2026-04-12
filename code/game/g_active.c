@@ -179,11 +179,13 @@ void G_SetClientSound( gentity_t *ent ) {
 	}
 	else
 #endif
+#ifndef ELITEFORCE
 	if (ent->waterlevel && (ent->watertype&(CONTENTS_LAVA|CONTENTS_SLIME)) ) {
 		ent->client->ps.loopSound = level.snd_fry;
 	} else {
 		ent->client->ps.loopSound = 0;
 	}
+#endif
 }
 
 
@@ -302,11 +304,13 @@ void	G_TouchTriggers( gentity_t *ent ) {
 		}
 	}
 
+#ifndef ELITEFORCE
 	// if we didn't touch a jump pad this pmove frame
 	if ( ent->client->ps.jumppad_frame != ent->client->ps.pmove_framecount ) {
 		ent->client->ps.jumppad_frame = 0;
 		ent->client->ps.jumppad_ent = 0;
 	}
+#endif
 }
 
 /*

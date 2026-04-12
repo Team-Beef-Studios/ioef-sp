@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cl_cgame.c  -- client system interaction with client game
 
 #include "client.h"
+#include "../sys/sys_loadlib.h"
 
 #include "../botlib/botlib.h"
 
@@ -772,16 +773,50 @@ void CL_InitCGame( void ) {
 			interpret = VMI_COMPILED;
 	}
 
-	cgvm = VM_Create( "cgame", CL_CgameSystemCalls, interpret );
-	if ( !cgvm ) {
-		Com_Error( ERR_DROP, "VM_Create on cgame failed" );
-	}
-	clc.state = CA_LOADING;
+#ifdef ELITEFORCE
+	if ( Cvar_VariableIntegerValue( "sp_game" ) ) {
+		// SP mode: the cgame code is inside efgamex86.dll (same DLL as game).
+		extern void *SV_SP_GetGameLibrary(void);
+		void *gameLib = SV_SP_GetGameLibrary();
+		if ( gameLib ) {
+			void (*cgDllEntry)(intptr_t (*)(intptr_t, ...));
+			intptr_t (QDECL *cgVmMain)(int, ...);
 
-	// init for this gamestate
-	// use the lastExecutedServerCommand instead of the serverCommandSequence
-	// otherwise server commands sent just before a gamestate are dropped
-	VM_Call( cgvm, CG_INIT, clc.serverMessageSequence, clc.lastExecutedServerCommand, clc.clientNum );
+			cgDllEntry = (void (*)(intptr_t (*)(intptr_t, ...)))Sys_LoadFunction( gameLib, "dllEntry" );
+			cgVmMain = (intptr_t (QDECL *)(int, ...))Sys_LoadFunction( gameLib, "vmMain" );
+
+			if ( cgDllEntry && cgVmMain ) {
+				extern vm_t *currentVM;
+				cgvm = VM_CreateFakeWithSyscall( "cgame_sp", cgVmMain, CL_SPCgameSystemCalls );
+				if ( !cgvm ) {
+					Com_Error( ERR_DROP, "VM_CreateFakeWithSyscall on SP cgame failed" );
+				}
+				currentVM = cgvm;
+				cgDllEntry( VM_DllSyscall );
+
+				clc.state = CA_LOADING;
+				VM_Call( cgvm, CG_INIT, clc.serverMessageSequence );
+				Com_Printf( "SP cgame initialized from efgamex86.dll\n" );
+			} else {
+				Com_Error( ERR_DROP, "SP cgame: efgamex86.dll missing dllEntry/vmMain" );
+			}
+		} else {
+			Com_Error( ERR_DROP, "SP cgame: game library not loaded" );
+		}
+	} else
+#endif
+	{
+		cgvm = VM_Create( "cgame", CL_CgameSystemCalls, interpret );
+		if ( !cgvm ) {
+			Com_Error( ERR_DROP, "VM_Create on cgame failed" );
+		}
+		clc.state = CA_LOADING;
+
+		// init for this gamestate
+		// use the lastExecutedServerCommand instead of the serverCommandSequence
+		// otherwise server commands sent just before a gamestate are dropped
+		VM_Call( cgvm, CG_INIT, clc.serverMessageSequence, clc.lastExecutedServerCommand, clc.clientNum );
+	}
 
 	// reset any CVAR_CHEAT cvars registered by cgame
 	if ( !clc.demoplaying && !cl_connectedToCheatServer )

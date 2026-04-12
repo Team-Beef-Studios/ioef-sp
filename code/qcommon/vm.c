@@ -341,16 +341,22 @@ intptr_t QDECL VM_DllSyscall( intptr_t arg, ... ) {
   intptr_t args[MAX_VMSYSCALL_ARGS];
   int i;
   va_list ap;
-  
+
   args[0] = arg;
-  
+
   va_start(ap, arg);
   for (i = 1; i < ARRAY_LEN (args); i++)
     args[i] = va_arg(ap, intptr_t);
   va_end(ap);
-  
+
   return currentVM->systemCall( args );
 #else // original id code
+	if ( !currentVM || !currentVM->systemCall ) {
+		Com_Error( ERR_FATAL, "VM_DllSyscall: currentVM=%p systemCall=%p name=%s",
+			(void*)currentVM,
+			currentVM ? (void*)currentVM->systemCall : NULL,
+			currentVM ? currentVM->name : "NULL" );
+	}
 	return currentVM->systemCall( &arg );
 #endif
 }
@@ -534,6 +540,12 @@ vm_t *VM_Restart(vm_t *vm, qboolean unpure)
 {
 	vmHeader_t	*header;
 
+	if ( vm->isFake ) {
+		// Bridge VMs are backed by external code and keep their state outside
+		// the generic VM loader. Restart is a no-op; callers re-run init.
+		return vm;
+	}
+
 	// DLL's can't be restarted in place
 	if ( vm->dllHandle ) {
 		char	name[MAX_QPATH];
@@ -709,7 +721,6 @@ void VM_Free( vm_t *vm ) {
 
 	if ( vm->dllHandle ) {
 		Sys_UnloadDll( vm->dllHandle );
-		Com_Memset( vm, 0, sizeof( *vm ) );
 	}
 #if 0	// now automatically freed by hunk
 	if ( vm->codeBase ) {
@@ -734,6 +745,63 @@ void VM_Clear(void) {
 		VM_Free(&vmTable[i]);
 	}
 }
+
+#ifdef ELITEFORCE
+/*
+===============
+VM_CreateFake
+
+Creates a vm_t with a custom entry point function but no actual DLL.
+Used for the SP game module bridge, which uses GetGameAPI rather than
+the standard dllEntry/vmMain interface.
+===============
+*/
+vm_t *VM_CreateFake( const char *module, intptr_t (QDECL *entryPoint)( int callNum, ... ) ) {
+	return VM_CreateFakeWithSyscall( module, entryPoint, NULL );
+}
+
+vm_t *VM_CreateFakeWithSyscall( const char *module,
+	intptr_t (QDECL *entryPoint)( int callNum, ... ),
+	intptr_t (*systemCalls)( intptr_t *parms ) ) {
+	vm_t *vm;
+	int i;
+
+	// Check if we already have a VM with this name (reuse it)
+	for ( i = 0 ; i < MAX_VM ; i++ ) {
+		if ( !Q_stricmp( vmTable[i].name, module ) ) {
+			vm = &vmTable[i];
+			vm->entryPoint = entryPoint;
+			vm->systemCall = systemCalls;
+			vm->dllHandle = NULL;
+			vm->isFake = qtrue;
+			return vm;
+		}
+	}
+
+	// find a free vm
+	for ( i = 0 ; i < MAX_VM ; i++ ) {
+		if ( !vmTable[i].name[0] ) {
+			break;
+		}
+	}
+
+	if ( i == MAX_VM ) {
+		Com_Error( ERR_FATAL, "VM_CreateFake: no free vm_t" );
+		return NULL;
+	}
+
+	vm = &vmTable[i];
+	Com_Memset( vm, 0, sizeof( *vm ) );
+
+	Q_strncpyz( vm->name, module, sizeof( vm->name ) );
+	vm->entryPoint = entryPoint;
+	vm->systemCall = systemCalls;
+	vm->dllHandle = NULL;
+	vm->isFake = qtrue;
+
+	return vm;
+}
+#endif
 
 void VM_Forced_Unload_Start(void) {
 	forced_unload = 1;

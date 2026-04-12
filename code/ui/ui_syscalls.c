@@ -125,9 +125,11 @@ int trap_FS_GetFileList(  const char *path, const char *extension, char *listbuf
 	return syscall( UI_FS_GETFILELIST, path, extension, listbuf, bufsize );
 }
 
+#ifndef ELITEFORCE
 int trap_FS_Seek( fileHandle_t f, long offset, int origin ) {
 	return syscall( UI_FS_SEEK, f, offset, origin );
 }
+#endif
 
 qhandle_t trap_R_RegisterModel( const char *name ) {
 	return syscall( UI_R_REGISTERMODEL, name );
@@ -137,9 +139,11 @@ qhandle_t trap_R_RegisterSkin( const char *name ) {
 	return syscall( UI_R_REGISTERSKIN, name );
 }
 
+#ifndef ELITEFORCE
 void trap_R_RegisterFont(const char *fontName, int pointSize, fontInfo_t *font) {
 	syscall( UI_R_REGISTERFONT, fontName, pointSize, font );
 }
+#endif
 
 qhandle_t trap_R_RegisterShaderNoMip( const char *name ) {
 	return syscall( UI_R_REGISTERSHADERNOMIP, name );
@@ -245,6 +249,7 @@ int trap_GetConfigString( int index, char* buff, int buffsize ) {
 	return syscall( UI_GETCONFIGSTRING, index, buff, buffsize );
 }
 
+#ifndef ELITEFORCE
 int	trap_LAN_GetServerCount( int source ) {
 	return syscall( UI_LAN_GETSERVERCOUNT, source );
 }
@@ -260,11 +265,16 @@ void trap_LAN_GetServerInfo( int source, int n, char *buf, int buflen ) {
 int trap_LAN_GetServerPing( int source, int n ) {
 	return syscall( UI_LAN_GETSERVERPING, source, n );
 }
+#else
+int	trap_LAN_GetServerCount( int source ) { return 0; }
+void trap_LAN_GetServerAddressString( int source, int n, char *buf, int buflen ) { if(buf && buflen > 0) buf[0] = '\0'; }
+#endif
 
 int trap_LAN_GetPingQueueCount( void ) {
 	return syscall( UI_LAN_GETPINGQUEUECOUNT );
 }
 
+#ifndef ELITEFORCE
 int trap_LAN_ServerStatus( const char *serverAddress, char *serverStatus, int maxLen ) {
 	return syscall( UI_LAN_SERVERSTATUS, serverAddress, serverStatus, maxLen );
 }
@@ -280,6 +290,7 @@ void trap_LAN_LoadCachedServers( void ) {
 void trap_LAN_ResetPings(int n) {
 	syscall( UI_LAN_RESETPINGS, n );
 }
+#endif
 
 void trap_LAN_ClearPing( int n ) {
 	syscall( UI_LAN_CLEARPING, n );
@@ -293,6 +304,7 @@ void trap_LAN_GetPingInfo( int n, char *buf, int buflen ) {
 	syscall( UI_LAN_GETPINGINFO, n, buf, buflen );
 }
 
+#ifndef ELITEFORCE
 void trap_LAN_MarkServerVisible( int source, int n, qboolean visible ) {
 	syscall( UI_LAN_MARKSERVERVISIBLE, source, n, visible );
 }
@@ -316,19 +328,25 @@ void trap_LAN_RemoveServer(int source, const char *addr) {
 int trap_LAN_CompareServers( int source, int sortKey, int sortDir, int s1, int s2 ) {
 	return syscall( UI_LAN_COMPARESERVERS, source, sortKey, sortDir, s1, s2 );
 }
+#endif
 
 int trap_MemoryRemaining( void ) {
 	return syscall( UI_MEMORY_REMAINING );
 }
 
+#ifndef ELITEFORCE
 void trap_GetCDKey( char *buf, int buflen ) {
 	syscall( UI_GET_CDKEY, buf, buflen );
 }
+#else
+void trap_GetCDKey( char *buf, int buflen ) { if(buf && buflen > 0) buf[0] = '\0'; }
+#endif
 
 void trap_SetCDKey( char *buf ) {
 	syscall( UI_SET_CDKEY, buf );
 }
 
+#ifndef ELITEFORCE
 int trap_PC_AddGlobalDefine( char *define ) {
 	return syscall( UI_PC_ADD_GLOBAL_DEFINE, define );
 }
@@ -365,7 +383,7 @@ int trap_RealTime(qtime_t *qtime) {
 int trap_CIN_PlayCinematic( const char *arg0, int xpos, int ypos, int width, int height, int bits) {
   return syscall(UI_CIN_PLAYCINEMATIC, arg0, xpos, ypos, width, height, bits);
 }
- 
+
 // stops playing the cinematic and ends it.  should always return FMV_EOF
 // cinematics must be stopped in reverse order of when they are started
 e_status trap_CIN_StopCinematic(int handle) {
@@ -377,13 +395,13 @@ e_status trap_CIN_StopCinematic(int handle) {
 e_status trap_CIN_RunCinematic (int handle) {
   return syscall(UI_CIN_RUNCINEMATIC, handle);
 }
- 
+
 
 // draws the current frame
 void trap_CIN_DrawCinematic (int handle) {
   syscall(UI_CIN_DRAWCINEMATIC, handle);
 }
- 
+
 
 // allows you to resize the animation dynamically
 void trap_CIN_SetExtents (int handle, int x, int y, int w, int h) {
@@ -402,3 +420,7 @@ qboolean trap_VerifyCDKey( const char *key, const char *chksum) {
 void trap_SetPbClStatus( int status ) {
 	syscall( UI_SET_PBCLSTATUS, status );
 }
+#else
+qboolean trap_VerifyCDKey( const char *key, const char *chksum) { return qtrue; }
+void trap_SetPbClStatus( int status ) { }
+#endif

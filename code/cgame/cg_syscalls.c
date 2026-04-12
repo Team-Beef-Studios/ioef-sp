@@ -101,9 +101,11 @@ void	trap_FS_FCloseFile( fileHandle_t f ) {
 	syscall( CG_FS_FCLOSEFILE, f );
 }
 
+#ifndef ELITEFORCE
 int trap_FS_Seek( fileHandle_t f, long offset, int origin ) {
 	return syscall( CG_FS_SEEK, f, offset, origin );
 }
+#endif
 
 void	trap_SendConsoleCommand( const char *text ) {
 	syscall( CG_SENDCONSOLECOMMAND, text );
@@ -113,9 +115,11 @@ void	trap_AddCommand( const char *cmdName ) {
 	syscall( CG_ADDCOMMAND, cmdName );
 }
 
+#ifndef ELITEFORCE
 void	trap_RemoveCommand( const char *cmdName ) {
 	syscall( CG_REMOVECOMMAND, cmdName );
 }
+#endif
 
 void	trap_SendClientCommand( const char *s ) {
 	syscall( CG_SENDCLIENTCOMMAND, s );
@@ -141,9 +145,11 @@ clipHandle_t trap_CM_TempBoxModel( const vec3_t mins, const vec3_t maxs ) {
 	return syscall( CG_CM_TEMPBOXMODEL, mins, maxs );
 }
 
+#ifndef ELITEFORCE
 clipHandle_t trap_CM_TempCapsuleModel( const vec3_t mins, const vec3_t maxs ) {
 	return syscall( CG_CM_TEMPCAPSULEMODEL, mins, maxs );
 }
+#endif
 
 int		trap_CM_PointContents( const vec3_t p, clipHandle_t model ) {
 	return syscall( CG_CM_POINTCONTENTS, p, model );
@@ -159,11 +165,13 @@ void	trap_CM_BoxTrace( trace_t *results, const vec3_t start, const vec3_t end,
 	syscall( CG_CM_BOXTRACE, results, start, end, mins, maxs, model, brushmask );
 }
 
+#ifndef ELITEFORCE
 void	trap_CM_CapsuleTrace( trace_t *results, const vec3_t start, const vec3_t end,
 						  const vec3_t mins, const vec3_t maxs,
 						  clipHandle_t model, int brushmask ) {
 	syscall( CG_CM_CAPSULETRACE, results, start, end, mins, maxs, model, brushmask );
 }
+#endif
 
 void	trap_CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t end,
 						  const vec3_t mins, const vec3_t maxs,
@@ -172,12 +180,14 @@ void	trap_CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const ve
 	syscall( CG_CM_TRANSFORMEDBOXTRACE, results, start, end, mins, maxs, model, brushmask, origin, angles );
 }
 
+#ifndef ELITEFORCE
 void	trap_CM_TransformedCapsuleTrace( trace_t *results, const vec3_t start, const vec3_t end,
 						  const vec3_t mins, const vec3_t maxs,
 						  clipHandle_t model, int brushmask,
 						  const vec3_t origin, const vec3_t angles ) {
 	syscall( CG_CM_TRANSFORMEDCAPSULETRACE, results, start, end, mins, maxs, model, brushmask, origin, angles );
 }
+#endif
 
 int		trap_CM_MarkFragments( int numPoints, const vec3_t *points, 
 				const vec3_t projection,
@@ -202,6 +212,7 @@ void	trap_S_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t ve
 	syscall( CG_S_ADDLOOPINGSOUND, entityNum, origin, velocity, sfx );
 }
 
+#ifndef ELITEFORCE
 void	trap_S_AddRealLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx ) {
 	syscall( CG_S_ADDREALLOOPINGSOUND, entityNum, origin, velocity, sfx );
 }
@@ -209,6 +220,12 @@ void	trap_S_AddRealLoopingSound( int entityNum, const vec3_t origin, const vec3_
 void	trap_S_StopLoopingSound( int entityNum ) {
 	syscall( CG_S_STOPLOOPINGSOUND, entityNum );
 }
+#else
+void	trap_S_AddRealLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx ) {
+	trap_S_AddLoopingSound( entityNum, origin, velocity, sfx );
+}
+void	trap_S_StopLoopingSound( int entityNum ) { }
+#endif
 
 void	trap_S_UpdateEntityPosition( int entityNum, const vec3_t origin ) {
 	syscall( CG_S_UPDATEENTITYPOSITION, entityNum, origin );
@@ -246,9 +263,11 @@ qhandle_t trap_R_RegisterShaderNoMip( const char *name ) {
 	return syscall( CG_R_REGISTERSHADERNOMIP, name );
 }
 
+#ifndef ELITEFORCE
 void trap_R_RegisterFont(const char *fontName, int pointSize, fontInfo_t *font) {
 	syscall(CG_R_REGISTERFONT, fontName, pointSize, font );
 }
+#endif
 
 void	trap_R_ClearScene( void ) {
 	syscall( CG_R_CLEARSCENE );
@@ -262,6 +281,7 @@ void	trap_R_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *
 	syscall( CG_R_ADDPOLYTOSCENE, hShader, numVerts, verts );
 }
 
+#ifndef ELITEFORCE
 void	trap_R_AddPolysToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num ) {
 	syscall( CG_R_ADDPOLYSTOSCENE, hShader, numVerts, verts, num );
 }
@@ -269,14 +289,19 @@ void	trap_R_AddPolysToScene( qhandle_t hShader , int numVerts, const polyVert_t 
 int		trap_R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir ) {
 	return syscall( CG_R_LIGHTFORPOINT, point, ambientLight, directedLight, lightDir );
 }
+#else
+int		trap_R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir ) { return 0; }
+#endif
 
 void	trap_R_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
 	syscall( CG_R_ADDLIGHTTOSCENE, org, PASSFLOAT(intensity), PASSFLOAT(r), PASSFLOAT(g), PASSFLOAT(b) );
 }
 
+#ifndef ELITEFORCE
 void	trap_R_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
 	syscall( CG_R_ADDADDITIVELIGHTTOSCENE, org, PASSFLOAT(intensity), PASSFLOAT(r), PASSFLOAT(g), PASSFLOAT(b) );
 }
+#endif
 
 void	trap_R_RenderScene( const refdef_t *fd ) {
 	syscall( CG_R_RENDERSCENE, fd );
@@ -300,9 +325,13 @@ int		trap_R_LerpTag( orientation_t *tag, clipHandle_t mod, int startFrame, int e
 	return syscall( CG_R_LERPTAG, tag, mod, startFrame, endFrame, PASSFLOAT(frac), tagName );
 }
 
+#ifndef ELITEFORCE
 void	trap_R_RemapShader( const char *oldShader, const char *newShader, const char *timeOffset ) {
 	syscall( CG_R_REMAP_SHADER, oldShader, newShader, timeOffset );
 }
+#else
+void	trap_R_RemapShader( const char *oldShader, const char *newShader, const char *timeOffset ) { }
+#endif
 
 void		trap_GetGlconfig( glconfig_t *glconfig ) {
 	syscall( CG_GETGLCONFIG, glconfig );
@@ -348,6 +377,7 @@ int trap_MemoryRemaining( void ) {
 	return syscall( CG_MEMORY_REMAINING );
 }
 
+#ifndef ELITEFORCE
 qboolean trap_Key_IsDown( int keynum ) {
 	return syscall( CG_KEY_ISDOWN, keynum );
 }
@@ -400,7 +430,7 @@ void trap_SnapVector( float *v ) {
 int trap_CIN_PlayCinematic( const char *arg0, int xpos, int ypos, int width, int height, int bits) {
   return syscall(CG_CIN_PLAYCINEMATIC, arg0, xpos, ypos, width, height, bits);
 }
- 
+
 // stops playing the cinematic and ends it.  should always return FMV_EOF
 // cinematics must be stopped in reverse order of when they are started
 e_status trap_CIN_StopCinematic(int handle) {
@@ -412,32 +442,18 @@ e_status trap_CIN_StopCinematic(int handle) {
 e_status trap_CIN_RunCinematic (int handle) {
   return syscall(CG_CIN_RUNCINEMATIC, handle);
 }
- 
+
 
 // draws the current frame
 void trap_CIN_DrawCinematic (int handle) {
   syscall(CG_CIN_DRAWCINEMATIC, handle);
 }
- 
+
 
 // allows you to resize the animation dynamically
 void trap_CIN_SetExtents (int handle, int x, int y, int w, int h) {
   syscall(CG_CIN_SETEXTENTS, handle, x, y, w, h);
 }
-
-/*
-qboolean trap_loadCamera( const char *name ) {
-	return syscall( CG_LOADCAMERA, name );
-}
-
-void trap_startCamera(int time) {
-	syscall(CG_STARTCAMERA, time);
-}
-
-qboolean trap_getCameraInfo( int time, vec3_t *origin, vec3_t *angles) {
-	return syscall( CG_GETCAMERAINFO, time, origin, angles );
-}
-*/
 
 qboolean trap_GetEntityToken( char *buffer, int bufferSize ) {
 	return syscall( CG_GET_ENTITY_TOKEN, buffer, bufferSize );
@@ -446,3 +462,11 @@ qboolean trap_GetEntityToken( char *buffer, int bufferSize ) {
 qboolean trap_R_inPVS( const vec3_t p1, const vec3_t p2 ) {
 	return syscall( CG_R_INPVS, p1, p2 );
 }
+#else
+// ELITEFORCE stubs for functions that are still referenced but have no syscall
+void trap_SnapVector( float *v ) {
+	v[0] = (int)v[0];
+	v[1] = (int)v[1];
+	v[2] = (int)v[2];
+}
+#endif

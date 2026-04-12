@@ -156,6 +156,7 @@ struct vm_s {
 	void		*dllHandle;
 	intptr_t			(QDECL *entryPoint)( int callNum, ... );
 	void (*destroy)(vm_t* self);
+	qboolean	isFake;
 
 	// for interpreted modules
 	qboolean	currentlyInterpreting;

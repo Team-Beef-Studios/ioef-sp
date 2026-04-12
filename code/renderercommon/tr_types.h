@@ -147,44 +147,45 @@ typedef struct {
 
 	// extra sprite information
 #ifdef ELITEFORCE
-        union
-        {
-                struct
-                {
-                        float rotation;
-                        float radius;
-                        byte  vertRGBA[4][4];
-                } sprite;
-                struct
-                {
-                        float width;
-                        float width2;
-                        float stscale;
-                } line;
-                struct  // that whole put-the-opening-brace-on-the-same-line-as-the-beginning-of-the-definition coding style is fecal // I agree.
-                {
-                        float   width;
-                        vec3_t  control1;
-                        vec3_t  control2;
-                } bezier;
-                struct
-                {
-                        float width;
-                        float width2;
-                        float stscale;
-                        float height;
-                        float bias;
-                        qboolean wrap;
-                } cylinder;
-                struct
-                {
-                        float width;
-                        float deviation;
-                        float stscale;
-                        qboolean wrap;
-                        qboolean taper;
-                } electricity;
-        } data;
+	// Keep flat radius/rotation for compatibility with Q3-style code
+	float		radius;
+	float		rotation;
+	union
+	{
+		struct
+		{
+			byte  vertRGBA[4][4];
+		} sprite;
+		struct
+		{
+			float width;
+			float width2;
+			float stscale;
+		} line;
+		struct
+		{
+			float   width;
+			vec3_t  control1;
+			vec3_t  control2;
+		} bezier;
+		struct
+		{
+			float width;
+			float width2;
+			float stscale;
+			float height;
+			float bias;
+			qboolean wrap;
+		} cylinder;
+		struct
+		{
+			float width;
+			float deviation;
+			float stscale;
+			qboolean wrap;
+			qboolean taper;
+		} electricity;
+	} data;
 #else
 	float		radius;
 	float		rotation;
@@ -279,6 +280,7 @@ typedef struct {
 	qboolean				textureEnvAddAvailable;
 #ifdef ELITEFORCE
 	qboolean				textureFilterAnisotropicAvailable;
+	qboolean				clampToEdgeAvailable;
 #endif
 
 	int						vidWidth, vidHeight;

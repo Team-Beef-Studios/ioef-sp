@@ -3508,21 +3508,13 @@ static void FS_CheckPak0( void )
 	else
 		Cvar_Set("com_standalone", "0");
 
-	if(!com_standalone->integer && (foundPak & 0x07) != 0x07)
+	if(!com_standalone->integer && (foundPak & 0x01) != 0x01)
 	{
 		char errorText[MAX_STRING_CHARS] = "";
 
-		if((foundPak & 0x01) != 0x01)
-		{
-			Q_strcat(errorText, sizeof(errorText),
-				"\"pak0.pk3\" is missing. Please copy it "
-				"from your legitimate EliteForce CDROM. ");
-		}
-		if((foundPak & 0x1fe) != 0x1fe)
-		{
-			Q_strcat(errorText, sizeof(errorText),
-				"Patch files are missing. Please\n"
-				"copy the .pk3 files from EliteForce patch 1.2 to baseEF.\n");		}
+		Q_strcat(errorText, sizeof(errorText),
+			"\"pak0.pk3\" is missing. Please copy it "
+			"from your legitimate EliteForce CDROM. ");
 
 		Q_strcat(errorText, sizeof(errorText),
 			va("Also check that your EliteForce executable is in "

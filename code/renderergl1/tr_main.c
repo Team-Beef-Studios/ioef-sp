@@ -1017,7 +1017,7 @@ int R_SpriteFogNum( trRefEntity_t *ent ) {
 	}
 
 	#ifdef ELITEFORCE
-	radius = ent->e.data.sprite.radius;
+	radius = ent->e.radius;
 	#else
 	radius = ent->e.radius;
 	#endif

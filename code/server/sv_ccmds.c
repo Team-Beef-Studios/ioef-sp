@@ -357,6 +357,41 @@ static void SV_MapRestart_f( void ) {
 
 //===============================================================
 
+#ifdef ELITEFORCE
+static void SV_SP_Save_f( void ) {
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf( "Usage: save <slotname>\n" );
+		return;
+	}
+
+	if ( !SV_SP_SaveGame( Cmd_Argv( 1 ) ) ) {
+		Com_Printf( "^1save failed\n" );
+	}
+}
+
+static void SV_SP_Load_f( void ) {
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf( "Usage: load <slotname>\n" );
+		return;
+	}
+
+	if ( !SV_SP_LoadGame( Cmd_Argv( 1 ) ) ) {
+		Com_Printf( "^1load failed\n" );
+	}
+}
+
+static void SV_SP_Wipe_f( void ) {
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf( "Usage: wipe <slotname>\n" );
+		return;
+	}
+
+	if ( !SV_SP_WipeSaveGame( Cmd_Argv( 1 ) ) ) {
+		Com_Printf( "^1wipe failed\n" );
+	}
+}
+#endif
+
 /*
 ==================
 SV_Kick_f
@@ -1566,6 +1601,11 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand("bandel", SV_BanDel_f);
 	Cmd_AddCommand("exceptdel", SV_ExceptDel_f);
 	Cmd_AddCommand("flushbans", SV_FlushBans_f);
+#ifdef ELITEFORCE
+	Cmd_AddCommand( "save", SV_SP_Save_f );
+	Cmd_AddCommand( "load", SV_SP_Load_f );
+	Cmd_AddCommand( "wipe", SV_SP_Wipe_f );
+#endif
 }
 
 /*

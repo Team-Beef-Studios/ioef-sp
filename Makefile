@@ -1566,6 +1566,7 @@ $(Q3ASM): $(Q3ASMOBJ)
 
 Q3OBJ = \
   $(B)/client/cl_cgame.o \
+  $(B)/client/cl_cgame_sp.o \
   $(B)/client/cl_cin.o \
   $(B)/client/cl_console.o \
   $(B)/client/cl_input.o \
@@ -1575,6 +1576,7 @@ Q3OBJ = \
   $(B)/client/cl_parse.o \
   $(B)/client/cl_scrn.o \
   $(B)/client/cl_ui.o \
+  $(B)/client/cl_ui_sp.o \
   $(B)/client/cl_avi.o \
   \
   $(B)/client/cm_load.o \
@@ -1615,7 +1617,9 @@ Q3OBJ = \
   $(B)/client/sv_bot.o \
   $(B)/client/sv_ccmds.o \
   $(B)/client/sv_client.o \
+  $(B)/client/sv_debug_server.o \
   $(B)/client/sv_game.o \
+  $(B)/client/sv_game_sp.o \
   $(B)/client/sv_init.o \
   $(B)/client/sv_main.o \
   $(B)/client/sv_net_chan.o \
@@ -2134,7 +2138,9 @@ Q3DOBJ = \
   $(B)/ded/sv_bot.o \
   $(B)/ded/sv_client.o \
   $(B)/ded/sv_ccmds.o \
+  $(B)/ded/sv_debug_server.o \
   $(B)/ded/sv_game.o \
+  $(B)/ded/sv_game_sp.o \
   $(B)/ded/sv_init.o \
   $(B)/ded/sv_main.o \
   $(B)/ded/sv_net_chan.o \

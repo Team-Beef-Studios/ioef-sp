@@ -374,11 +374,13 @@ static void CG_TouchTriggerPrediction( void ) {
 		}
 	}
 
+#ifndef ELITEFORCE
 	// if we didn't touch a jump pad this pmove frame
 	if ( cg.predictedPlayerState.jumppad_frame != cg.predictedPlayerState.pmove_framecount ) {
 		cg.predictedPlayerState.jumppad_frame = 0;
 		cg.predictedPlayerState.jumppad_ent = 0;
 	}
+#endif
 }
 
 

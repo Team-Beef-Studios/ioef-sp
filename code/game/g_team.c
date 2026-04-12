@@ -508,10 +508,12 @@ void Team_CheckHurtCarrier(gentity_t *targ, gentity_t *attacker)
 		targ->client->sess.sessionTeam != attacker->client->sess.sessionTeam)
 		attacker->client->pers.teamState.lasthurtcarrier = level.time;
 
+#ifndef ELITEFORCE
 	// skulls
 	if (targ->client->ps.generic1 &&
 		targ->client->sess.sessionTeam != attacker->client->sess.sessionTeam)
 		attacker->client->pers.teamState.lasthurtcarrier = level.time;
+#endif
 }
 
 

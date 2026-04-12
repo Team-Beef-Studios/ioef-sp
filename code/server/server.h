@@ -411,6 +411,27 @@ void		SV_InitGameProgs ( void );
 void		SV_ShutdownGameProgs ( void );
 void		SV_RestartGameProgs( void );
 qboolean	SV_inPVS (const vec3_t p1, const vec3_t p2);
+qboolean	SV_inPVSIgnorePortals (const vec3_t p1, const vec3_t p2);
+void		SV_GetServerinfo( char *buffer, int bufferSize );
+void		SV_SetBrushModel( sharedEntity_t *ent, const char *name );
+void		SV_AdjustAreaPortalState( sharedEntity_t *ent, qboolean open );
+qboolean	SV_EntityContact( vec3_t mins, vec3_t maxs, const sharedEntity_t *gEnt, int capsule );
+
+#ifdef ELITEFORCE
+// sv_game_sp.c - SP game module support
+#include "../qcommon/sp_types.h"
+void		SV_SP_InitGameProgs( void );
+void		SV_SP_ShutdownGameProgs( void );
+void		SV_SP_InitGameVM( void );
+qboolean	SV_SP_IsActive( void );
+intptr_t QDECL SV_SP_GameVmMain( int command, ... );
+void		*SV_SP_GetGameLibrary( void );
+void		*SV_SP_GetRawPlayerState( void );
+sp_entityState_t *SV_SP_GetRawEntityState( int entNum );
+qboolean	SV_SP_SaveGame( const char *slotName );
+qboolean	SV_SP_LoadGame( const char *slotName );
+qboolean	SV_SP_WipeSaveGame( const char *slotName );
+#endif
 
 //
 // sv_bot.c
@@ -483,6 +504,13 @@ void SV_Trace( trace_t *results, const vec3_t start, vec3_t mins, vec3_t maxs, c
 
 void SV_ClipToEntity( trace_t *trace, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int entityNum, int contentmask, int capsule );
 // clip to a specific entity
+
+//
+// sv_debug_server.c
+//
+void		DebugServer_Init( void );
+void		DebugServer_Shutdown( void );
+void		DebugServer_Frame( void );
 
 //
 // sv_net_chan.c

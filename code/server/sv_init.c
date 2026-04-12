@@ -708,6 +708,9 @@ void SV_Init (void)
 	
 	// Load saved bans
 	Cbuf_AddText("rehashbans\n");
+
+	// Start debug inspection server
+	DebugServer_Init();
 }
 
 
@@ -763,6 +766,8 @@ void SV_Shutdown( char *finalmsg ) {
 	}
 
 	Com_Printf( "----- Server Shutdown (%s) -----\n", finalmsg );
+
+	DebugServer_Shutdown();
 
 	NET_LeaveMulticast6();
 

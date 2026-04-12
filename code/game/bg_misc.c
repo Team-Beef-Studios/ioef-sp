@@ -1401,9 +1401,17 @@ void BG_AddPredictableEventToPlayerstate( int newEvent, int eventParm, playerSta
 		trap_Cvar_VariableStringBuffer("showevents", buf, sizeof(buf));
 		if ( atof(buf) != 0 ) {
 #ifdef QAGAME
+#ifdef ELITEFORCE
+			Com_Printf(" game event svt %5d -> %5d: num = %20s parm %d\n", ps->commandTime, ps->eventSequence, eventnames[newEvent], eventParm);
+#else
 			Com_Printf(" game event svt %5d -> %5d: num = %20s parm %d\n", ps->pmove_framecount/*ps->commandTime*/, ps->eventSequence, eventnames[newEvent], eventParm);
+#endif
+#else
+#ifdef ELITEFORCE
+			Com_Printf("Cgame event svt %5d -> %5d: num = %20s parm %d\n", ps->commandTime, ps->eventSequence, eventnames[newEvent], eventParm);
 #else
 			Com_Printf("Cgame event svt %5d -> %5d: num = %20s parm %d\n", ps->pmove_framecount/*ps->commandTime*/, ps->eventSequence, eventnames[newEvent], eventParm);
+#endif
 #endif
 		}
 	}
@@ -1418,6 +1426,11 @@ void BG_AddPredictableEventToPlayerstate( int newEvent, int eventParm, playerSta
 BG_TouchJumpPad
 ========================
 */
+#ifdef ELITEFORCE
+void BG_TouchJumpPad( playerState_t *ps, entityState_t *jumppad ) {
+	VectorCopy( jumppad->origin2, ps->velocity );
+}
+#else
 void BG_TouchJumpPad( playerState_t *ps, entityState_t *jumppad ) {
 	vec3_t	angles;
 	float p;
@@ -1452,6 +1465,7 @@ void BG_TouchJumpPad( playerState_t *ps, entityState_t *jumppad ) {
 	// give the player the velocity from the jumppad
 	VectorCopy( jumppad->origin2, ps->velocity );
 }
+#endif
 
 /*
 ========================
@@ -1525,8 +1539,10 @@ void BG_PlayerStateToEntityState( playerState_t *ps, entityState_t *s, qboolean 
 		}
 	}
 
+#ifndef ELITEFORCE
 	s->loopSound = ps->loopSound;
 	s->generic1 = ps->generic1;
+#endif
 }
 
 /*
@@ -1605,6 +1621,8 @@ void BG_PlayerStateToEntityStateExtraPolate( playerState_t *ps, entityState_t *s
 		}
 	}
 
+#ifndef ELITEFORCE
 	s->loopSound = ps->loopSound;
 	s->generic1 = ps->generic1;
+#endif
 }

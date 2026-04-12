@@ -571,6 +571,7 @@ GRAPPLING HOOK
 ======================================================================
 */
 
+#ifndef ELITEFORCE
 void Weapon_GrapplingHook_Fire (gentity_t *ent)
 {
 	if (!ent->client->fireHeld && !ent->client->hook)
@@ -602,6 +603,10 @@ void Weapon_HookThink (gentity_t *ent)
 
 	VectorCopy( ent->r.currentOrigin, ent->parent->client->ps.grapplePoint);
 }
+#else
+void Weapon_HookFree (gentity_t *ent) { G_FreeEntity( ent ); }
+void Weapon_HookThink (gentity_t *ent) { }
+#endif
 
 /*
 ======================================================================
@@ -874,9 +879,11 @@ void FireWeapon( gentity_t *ent ) {
 	case WP_BFG:
 		BFG_Fire( ent );
 		break;
+#ifndef ELITEFORCE
 	case WP_GRAPPLING_HOOK:
 		Weapon_GrapplingHook_Fire( ent );
 		break;
+#endif
 #ifdef MISSIONPACK
 	case WP_NAILGUN:
 		Weapon_Nailgun_Fire( ent );

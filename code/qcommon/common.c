@@ -2862,12 +2862,15 @@ void Com_Init( char *commandLine ) {
 
 	if( Sys_WritePIDFile( ) ) {
 #ifndef DEDICATED
-		const char *message = "The last time " CLIENT_WINDOW_TITLE " ran, "
-			"it didn't exit properly. This may be due to inappropriate video "
-			"settings. Would you like to start with \"safe\" video settings?";
+		// Skip the safe mode dialog when sp_game is set (non-interactive testing)
+		if ( !Com_SafeMode() && !Cvar_VariableIntegerValue( "com_skipSafeDialog" ) ) {
+			const char *message = "The last time " CLIENT_WINDOW_TITLE " ran, "
+				"it didn't exit properly. This may be due to inappropriate video "
+				"settings. Would you like to start with \"safe\" video settings?";
 
-		if( Sys_Dialog( DT_YES_NO, message, "Abnormal Exit" ) == DR_YES ) {
-			Cvar_Set( "com_abnormalExit", "1" );
+			if( Sys_Dialog( DT_YES_NO, message, "Abnormal Exit" ) == DR_YES ) {
+				Cvar_Set( "com_abnormalExit", "1" );
+			}
 		}
 #endif
 	}

@@ -1,0 +1,20 @@
+{
+  "name": "ioef-game-inspector",
+  "version": "1.0.0",
+  "description": "MCP server for live ioEF game engine inspection - entity state, memory layouts, struct validation",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}

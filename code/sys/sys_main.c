@@ -613,6 +613,19 @@ int main( int argc, char **argv )
 	int   i;
 	char  commandLine[ MAX_STRING_CHARS ] = { 0 };
 
+#ifdef _WIN32
+	// Disable Windows DPI scaling so the GL viewport matches the window size
+	{
+		void *user32 = Sys_LoadLibrary("user32.dll");
+		if (user32) {
+			int (WINAPI *pSetProcessDPIAware)(void);
+			pSetProcessDPIAware = Sys_LoadFunction(user32, "SetProcessDPIAware");
+			if (pSetProcessDPIAware) pSetProcessDPIAware();
+			// Don't unload user32 - it stays loaded for the process lifetime
+		}
+	}
+#endif
+
 #ifndef DEDICATED
 	// SDL version check
 
