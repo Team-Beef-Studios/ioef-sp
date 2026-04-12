@@ -119,7 +119,9 @@ void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts
 	}
 
 	if ( !hShader ) {
-		ri.Printf( PRINT_WARNING, "WARNING: RE_AddPolyToScene: NULL poly shader\n");
+		// SP cgame occasionally passes NULL shader handles for effects that
+		// use the Ritual FX system (which we don't fully implement).
+		// Suppress the warning to avoid console spam and visual flicker.
 		return;
 	}
 

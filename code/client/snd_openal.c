@@ -624,6 +624,44 @@ typedef struct sentity_s
 
 static sentity_t entityList[MAX_GENTITIES];
 
+#ifdef ELITEFORCE
+extern void SV_SP_ClearSoundOverrideStates( void );
+extern void SV_SP_SetSoundOverrideValue( int entNum, int value );
+
+#define SP_CHAN_VOICE_ATTEN 4
+#define SP_CHAN_ANNOUNCER  9
+
+static qboolean S_AL_IsSpeechChannel( int channel ) {
+	return channel == CHAN_VOICE ||
+		channel == SP_CHAN_VOICE_ATTEN ||
+		channel == SP_CHAN_ANNOUNCER;
+}
+
+static void S_AL_SyncSoundOverrides( void ) {
+	int i;
+
+	SV_SP_ClearSoundOverrideStates();
+
+	for ( i = 0; i < srcCount; i++ ) {
+		src_t *curSource = &srcList[i];
+
+		if ( !curSource->isActive || !curSource->isPlaying ) {
+			continue;
+		}
+
+		if ( !S_AL_IsSpeechChannel( curSource->channel ) ) {
+			continue;
+		}
+
+		if ( curSource->entity < 0 || curSource->entity >= MAX_GENTITIES ) {
+			continue;
+		}
+
+		SV_SP_SetSoundOverrideValue( curSource->entity, 1 );
+	}
+}
+#endif
+
 /*
 =================
 S_AL_SanitiseVector
@@ -2244,6 +2282,9 @@ void S_AL_StopAllSounds( void )
 	S_AL_StopBackgroundTrack();
 	for (i = 0; i < MAX_RAW_STREAMS; i++)
 		S_AL_StreamDie(i);
+#ifdef ELITEFORCE
+	SV_SP_ClearSoundOverrideStates();
+#endif
 }
 
 /*
@@ -2286,6 +2327,13 @@ void S_AL_Update( void )
 {
 	int i;
 
+	if(s_muted->integer)
+	{
+#ifdef ELITEFORCE
+		SV_SP_ClearSoundOverrideStates();
+#endif
+	}
+
 	if(s_muted->modified)
 	{
 		// muted state changed. Let S_AL_Gain turn up all sources again.
@@ -2300,6 +2348,10 @@ void S_AL_Update( void )
 
 	// Update SFX channels
 	S_AL_SrcUpdate();
+
+#ifdef ELITEFORCE
+	S_AL_SyncSoundOverrides();
+#endif
 
 	// Update streams
 	for (i = 0; i < MAX_RAW_STREAMS; i++)

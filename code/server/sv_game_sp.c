@@ -163,11 +163,9 @@ typedef struct {
 	void	(*unlinkentity)( sp_gentity_t *ent );
 	int	(*EntitiesInBox)( const vec3_t mins, const vec3_t maxs, sp_gentity_t **list, int maxcount );
 	qboolean	(*EntityContact)( const vec3_t mins, const vec3_t maxs, const sp_gentity_t *ent );
-	// S_Override is a pointer to an int array the SP game uses to override
-	// sound indices.  In the original EF1 engine this pointed into the sound
-	// system's internal tables.  We provide a dummy array since ioEF's sound
-	// system doesn't support this mechanism; the game reads/writes it but the
-	// values have no effect.
+	// S_Override points at the engine-maintained speech activity table.
+	// The SP game checks this to see whether entity dialogue is still active;
+	// the client sound backends refresh it from live voice-channel playback.
 	int	*S_Override;
 	void	*(*Malloc)( int bytes );
 	void	(*Free)( void *buf );
@@ -1537,11 +1535,10 @@ static qboolean SV_SP_LoadPendingSave( void ) {
 // pointers for all engine services.
 static sp_game_import_t	gi;
 
-// Dummy array for the S_Override pointer in sp_game_import_t.
-// The original EF1 engine exposed a sound override table here; ioEF
-// doesn't support this feature, but the SP game module reads/writes
-// the array during gameplay.  Providing a valid buffer prevents crashes.
-static int		s_override_dummy[256];
+// Shared sound override table exposed through gi.S_Override.
+// The SP game reads this to decide whether entity speech is still active.
+// The client sound backends refresh it from live mixer state each frame.
+static int		s_override_state[MAX_GENTITIES];
 
 // ============================================================================
 // Wrapper functions for sp_game_import_t
@@ -1611,6 +1608,9 @@ static cvar_t *SV_SP_Cvar( const char *var_name, const char *value, int flags ) 
 }
 
 static void SV_SP_CvarSet( const char *var_name, const char *value ) {
+	char buf[128];
+	Com_sprintf(buf, sizeof(buf), "%s=%s", var_name, value);
+	DebugServer_TraceSPCall(1001, "gi.CvarSet", qtrue, 0,0,0,0,0,0, buf, 0);
 	Cvar_Set( var_name, value );
 }
 
@@ -1663,6 +1663,9 @@ static int SV_SP_FS_GetFileList( const char *path, const char *extension, char *
 // (entity data, AI state, script variables, etc.) into the save stream.
 // The chunk ID is chosen by the game module -- we just pass it through.
 static qboolean SV_SP_AppendToSaveGame( unsigned long chid, void *data, int length ) {
+	char buf[64];
+	Com_sprintf(buf, sizeof(buf), "chid=0x%08lx len=%d", chid, length);
+	DebugServer_TraceSPCall(1010, "gi.AppendToSave", qtrue, (intptr_t)chid, length, 0,0,0,0, buf, 0);
 	return SV_SP_WriteSaveChunk( &sv_sp_saveWrite, chid, data, length );
 }
 
@@ -1670,7 +1673,11 @@ static qboolean SV_SP_AppendToSaveGame( unsigned long chid, void *data, int leng
 // module calls this during ge->ReadLevel to deserialize its saved state.
 // Returns the data length on success, 0 on failure.
 static int SV_SP_ReadFromSaveGame( unsigned long chid, void *pvAddress, int iLength, void **ppvAddressPtr ) {
-	return SV_SP_ReadSaveChunk( &sv_sp_saveRead, chid, pvAddress, iLength, ppvAddressPtr, qfalse );
+	int r = SV_SP_ReadSaveChunk( &sv_sp_saveRead, chid, pvAddress, iLength, ppvAddressPtr, qfalse );
+	char buf[64];
+	Com_sprintf(buf, sizeof(buf), "chid=0x%08lx req=%d got=%d", chid, iLength, r);
+	DebugServer_TraceSPCall(1011, "gi.ReadFromSave", qtrue, (intptr_t)chid, iLength, r, 0,0,0, buf, r);
+	return r;
 }
 
 /*
@@ -1906,6 +1913,7 @@ qboolean SV_SP_WipeSaveGame( const char *slotName ) {
 }
 
 static void SV_SP_SendConsoleCommand( const char *text ) {
+	DebugServer_TraceSPCall(1020, "gi.SendConsoleCmd", qtrue, 0,0,0,0,0,0, text, 0);
 	Cbuf_ExecuteText( EXEC_APPEND, text );
 }
 
@@ -1938,6 +1946,9 @@ static void SV_SP_SendServerCommand( int clientNum, const char *fmt, ... ) {
 }
 
 static void SV_SP_SetConfigstring( int num, const char *string ) {
+	char buf[128];
+	Com_sprintf(buf, sizeof(buf), "cs[%d]=%s", num, string ? string : "(null)");
+	DebugServer_TraceSPCall(1030, "gi.SetConfigstring", qtrue, num, 0,0,0,0,0, buf, 0);
 	SV_SetConfigstring( num, string );
 }
 
@@ -2070,6 +2081,18 @@ static void SV_SP_Free( void *buf ) {
 	Z_Free( buf );
 }
 
+void SV_SP_ClearSoundOverrideStates( void ) {
+	Com_Memset( s_override_state, 0, sizeof( s_override_state ) );
+}
+
+void SV_SP_SetSoundOverrideValue( int entNum, int value ) {
+	if ( entNum < 0 || entNum >= MAX_GENTITIES ) {
+		return;
+	}
+
+	s_override_state[entNum] = value;
+}
+
 // ============================================================================
 // Initialization functions
 // ============================================================================
@@ -2084,7 +2107,7 @@ from the SP game module's function pointer interface to the engine.
 */
 static void SV_SP_InitGameImport( void ) {
 	Com_Memset( &gi, 0, sizeof( gi ) );
-	Com_Memset( s_override_dummy, 0, sizeof( s_override_dummy ) );
+	SV_SP_ClearSoundOverrideStates();
 
 	gi.Printf					= SV_SP_Printf;
 	gi.WriteCam					= SV_SP_WriteCam;
@@ -2138,7 +2161,7 @@ static void SV_SP_InitGameImport( void ) {
 	gi.EntitiesInBox			= SV_SP_EntitiesInBox;
 	gi.EntityContact			= SV_SP_EntityContact;
 
-	gi.S_Override				= s_override_dummy;
+	gi.S_Override				= s_override_state;
 
 	gi.Malloc					= SV_SP_Malloc;
 	gi.Free						= SV_SP_Free;
@@ -2496,7 +2519,10 @@ intptr_t QDECL SV_SP_GameVmMain( int command, ... ) {
 	case GAME_CLIENT_CONNECT: {
 		// Q3 passes: clientNum, firstTime, isBot
 		// SP expects: clientNum, firstTime, SavedGameJustLoaded_e
-		char *result = ge->ClientConnect( arg0, (qboolean)arg1, sv_sp_savedGameJustLoaded );
+		char *result;
+		SV_SP_BindCgameStub();
+		result = ge->ClientConnect( arg0, (qboolean)arg1, sv_sp_savedGameJustLoaded );
+		SV_SP_RestoreCgameSyscall();
 		if ( result ) {
 			Com_Printf( "SP ClientConnect(%d) REJECTED: %s\n", arg0, result );
 			return (intptr_t)result;
@@ -2522,10 +2548,16 @@ intptr_t QDECL SV_SP_GameVmMain( int command, ... ) {
 		spCmd.forwardmove = cmd->forwardmove;
 		spCmd.rightmove = cmd->rightmove;
 		spCmd.upmove = cmd->upmove;
+		SV_SP_BindCgameStub();
 		ge->ClientBegin( arg0, &spCmd, sv_sp_savedGameJustLoaded );
+		SV_SP_RestoreCgameSyscall();
 		sv_sp_savedGameJustLoaded = eNO;
 		// Update client pointer in case it changed
 		SV_SP_SetupGameClient( arg0 );
+		// SP: Force client to CS_ACTIVE so snapshots don't carry
+		// SNAPFLAG_NOT_ACTIVE, which blocks CL_FirstSnapshot from
+		// transitioning the client-side state to CA_ACTIVE.
+		svs.clients[arg0].state = CS_ACTIVE;
 		return 0;
 	}
 
@@ -2556,7 +2588,33 @@ intptr_t QDECL SV_SP_GameVmMain( int command, ... ) {
 		spCmd.forwardmove = cmd->forwardmove;
 		spCmd.rightmove = cmd->rightmove;
 		spCmd.upmove = cmd->upmove;
+		// Debug: force forward movement to test without SDL focus
+		if ( Cvar_VariableIntegerValue("sp_forcemove") ) {
+			spCmd.forwardmove = 127;
+		}
+		SV_SP_BindCgameStub();
 		ge->ClientThink( arg0, &spCmd );
+		SV_SP_RestoreCgameSyscall();
+		// After ClientThink: if player_locked zeroed our movement,
+		// directly nudge the player's origin to verify rendering works
+		if ( Cvar_VariableIntegerValue("sp_forcemove") == 2 ) {
+			sp_gentity_t *pEnt = (sp_gentity_t *)((byte *)ge->gentities + 0 * ge->gentitySize);
+			if ( pEnt->client ) {
+				sp_playerState_t *ps = (sp_playerState_t *)pEnt->client;
+				// Move 2 units per think in the facing direction
+				float yaw = ps->viewangles[1] * 3.14159f / 180.0f;
+				ps->origin[0] += cosf(yaw) * 2.0f;
+				ps->origin[1] += sinf(yaw) * 2.0f;
+			}
+		}
+		// Sync the ioEF-format playerState so snapshot builder and
+		// the debug inspector see updated commandTime/origin/velocity
+		{
+			sp_gentity_t *playerEnt = (sp_gentity_t *)((byte *)ge->gentities + 0 * ge->gentitySize);
+			if ( playerEnt->client ) {
+				SV_SP_SyncPlayerState( playerEnt->client );
+				}
+		}
 		// Update entity count in case the game changed it
 		sv.num_entities = ge->num_entities;
 		return 0;
@@ -2565,7 +2623,9 @@ intptr_t QDECL SV_SP_GameVmMain( int command, ... ) {
 	case GAME_RUN_FRAME:
 		// Sync entities before the frame so traces during RunFrame see current data
 		SV_SP_SyncAllEntities();
+		SV_SP_BindCgameStub();
 		ge->RunFrame( arg0 );
+		SV_SP_RestoreCgameSyscall();
 		// Sync again after the frame for snapshot building
 		SV_SP_SyncAllEntities();
 		return 0;

@@ -1642,5 +1642,11 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 
 	re.TakeVideoFrame = RE_TakeVideoFrame;
 
+#ifdef ELITEFORCE
+	re.SetScissor = RE_SetScissor;
+	re.DrawRotatePic = RE_DrawRotatePic;
+	re.DrawScreenShot = RE_DrawScreenShot;
+#endif
+
 	return &re;
 }

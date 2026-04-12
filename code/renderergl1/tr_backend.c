@@ -825,6 +825,68 @@ void RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int
 	}
 }
 
+#ifdef ELITEFORCE
+/*
+=============
+RE_DrawScreenShot
+
+Captures the current framebuffer and draws it as a 2D quad.
+Used by the EF SP cgame to freeze the screen during transitions.
+Placed here (like RE_StretchRaw) because it needs direct GL access.
+=============
+*/
+void RE_DrawScreenShot( float x, float y, float w, float h ) {
+	byte *buffer;
+	int fbWidth, fbHeight;
+
+	if ( !tr.registered ) {
+		return;
+	}
+
+	R_IssuePendingRenderCommands();
+
+	if ( tess.numIndexes ) {
+		RB_EndSurface();
+	}
+
+	fbWidth = glConfig.vidWidth;
+	fbHeight = glConfig.vidHeight;
+
+	buffer = ri.Hunk_AllocateTempMemory( fbWidth * fbHeight * 4 );
+	qglReadPixels( 0, 0, fbWidth, fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, buffer );
+
+	RB_SetGL2D();
+
+	GL_Bind( tr.scratchImage[16] );
+
+	if ( fbWidth != tr.scratchImage[16]->width || fbHeight != tr.scratchImage[16]->height ) {
+		tr.scratchImage[16]->width = tr.scratchImage[16]->uploadWidth = fbWidth;
+		tr.scratchImage[16]->height = tr.scratchImage[16]->uploadHeight = fbHeight;
+		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, fbWidth, fbHeight, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, buffer );
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+	} else {
+		qglTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, fbWidth, fbHeight,
+			GL_RGBA, GL_UNSIGNED_BYTE, buffer );
+	}
+
+	ri.Hunk_FreeTempMemory( buffer );
+
+	qglColor3f( 1.0f, 1.0f, 1.0f );
+
+	/* Framebuffer is bottom-up, 2D ortho is top-down -- flip vertically. */
+	qglBegin( GL_QUADS );
+	qglTexCoord2f( 0.0f, 1.0f );  qglVertex2f( x, y );
+	qglTexCoord2f( 1.0f, 1.0f );  qglVertex2f( x + w, y );
+	qglTexCoord2f( 1.0f, 0.0f );  qglVertex2f( x + w, y + h );
+	qglTexCoord2f( 0.0f, 0.0f );  qglVertex2f( x, y + h );
+	qglEnd();
+}
+#endif
+
 
 /*
 =============
@@ -920,6 +982,134 @@ const void *RB_StretchPic ( const void *data ) {
 	return (const void *)(cmd + 1);
 }
 
+#ifdef ELITEFORCE
+/*
+=============
+RB_Scissor
+
+Enables or disables the GL scissor test for 2D drawing.
+A zero-area rectangle disables scissor and restores fullscreen drawing.
+=============
+*/
+static const void *RB_Scissor( const void *data ) {
+	const scissorCommand_t *cmd;
+
+	cmd = (const scissorCommand_t *)data;
+
+	if ( !backEnd.projection2D ) {
+		RB_SetGL2D();
+	}
+
+	/* Flush any pending 2D geometry so the scissor state change takes
+	   effect between draw calls, not in the middle of a batch. */
+	if ( tess.numIndexes ) {
+		RB_EndSurface();
+	}
+
+	if ( cmd->w <= 0 || cmd->h <= 0 ) {
+		/* Restore full-viewport scissoring without leaving the test disabled. */
+		qglEnable( GL_SCISSOR_TEST );
+		qglScissor( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
+	} else {
+		/* The 2D coordinate system is top-down (0,0 = top-left), but
+		   GL scissor is bottom-up, so flip the Y coordinate. */
+		int sx = (int)cmd->x;
+		int sy = glConfig.vidHeight - (int)( cmd->y + cmd->h );
+		int sw = (int)cmd->w;
+		int sh = (int)cmd->h;
+		qglEnable( GL_SCISSOR_TEST );
+		qglScissor( sx, sy, sw, sh );
+	}
+
+	return (const void *)( cmd + 1 );
+}
+
+/*
+=============
+RB_RotatePic
+
+Draws a textured quad rotated by an angle (degrees) around its centre.
+The vertex positions are pre-rotated before being fed into the tessellator,
+so this integrates with the normal shader batching system.
+=============
+*/
+static const void *RB_RotatePic( const void *data ) {
+	const rotatePicCommand_t *cmd;
+	shader_t *shader;
+	int		numVerts, numIndexes;
+	float	cx, cy;		/* centre of quad */
+	float	cosA, sinA;
+	float	dx, dy;
+	float	vx[4], vy[4];	/* corner positions before rotation */
+	int		i;
+
+	cmd = (const rotatePicCommand_t *)data;
+
+	if ( !backEnd.projection2D ) {
+		RB_SetGL2D();
+	}
+
+	shader = cmd->shader;
+	if ( shader != tess.shader ) {
+		if ( tess.numIndexes ) {
+			RB_EndSurface();
+		}
+		backEnd.currentEntity = &backEnd.entity2D;
+		RB_BeginSurface( shader, 0 );
+	}
+
+	RB_CHECKOVERFLOW( 4, 6 );
+	numVerts = tess.numVertexes;
+	numIndexes = tess.numIndexes;
+
+	tess.numVertexes += 4;
+	tess.numIndexes += 6;
+
+	tess.indexes[ numIndexes ] = numVerts + 3;
+	tess.indexes[ numIndexes + 1 ] = numVerts + 0;
+	tess.indexes[ numIndexes + 2 ] = numVerts + 2;
+	tess.indexes[ numIndexes + 3 ] = numVerts + 2;
+	tess.indexes[ numIndexes + 4 ] = numVerts + 0;
+	tess.indexes[ numIndexes + 5 ] = numVerts + 1;
+
+	*(int *)tess.vertexColors[ numVerts ] =
+		*(int *)tess.vertexColors[ numVerts + 1 ] =
+		*(int *)tess.vertexColors[ numVerts + 2 ] =
+		*(int *)tess.vertexColors[ numVerts + 3 ] = *(int *)backEnd.color2D;
+
+	/* Unrotated corner positions (same as RB_StretchPic) */
+	vx[0] = cmd->x;            vy[0] = cmd->y;
+	vx[1] = cmd->x + cmd->w;   vy[1] = cmd->y;
+	vx[2] = cmd->x + cmd->w;   vy[2] = cmd->y + cmd->h;
+	vx[3] = cmd->x;            vy[3] = cmd->y + cmd->h;
+
+	/* Rotate around centre */
+	cx = cmd->x + cmd->w * 0.5f;
+	cy = cmd->y + cmd->h * 0.5f;
+	cosA = cos( DEG2RAD( cmd->angle ) );
+	sinA = sin( DEG2RAD( cmd->angle ) );
+
+	for ( i = 0; i < 4; i++ ) {
+		dx = vx[i] - cx;
+		dy = vy[i] - cy;
+		tess.xyz[ numVerts + i ][0] = cx + dx * cosA - dy * sinA;
+		tess.xyz[ numVerts + i ][1] = cy + dx * sinA + dy * cosA;
+		tess.xyz[ numVerts + i ][2] = 0;
+	}
+
+	tess.texCoords[ numVerts ][0][0] = cmd->s1;
+	tess.texCoords[ numVerts ][0][1] = cmd->t1;
+	tess.texCoords[ numVerts + 1 ][0][0] = cmd->s2;
+	tess.texCoords[ numVerts + 1 ][0][1] = cmd->t1;
+	tess.texCoords[ numVerts + 2 ][0][0] = cmd->s2;
+	tess.texCoords[ numVerts + 2 ][0][1] = cmd->t2;
+	tess.texCoords[ numVerts + 3 ][0][0] = cmd->s1;
+	tess.texCoords[ numVerts + 3 ][0][1] = cmd->t2;
+
+	return (const void *)( cmd + 1 );
+}
+#endif
+
 
 /*
 =============
@@ -964,6 +1154,17 @@ const void	*RB_DrawBuffer( const void *data ) {
 		qglClearColor( 1, 0, 0.5, 1 );
 		qglClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 	}
+#ifdef ELITEFORCE
+	else {
+		// Always clear the full-screen color buffer to prevent
+		// double-buffer flickering.  SP cutscene cameras can look at
+		// void/space where no world geometry covers the screen.
+		// Without clearing, stale content from the other double-buffer
+		// shows through on alternating frames.
+		qglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+		qglClear( GL_COLOR_BUFFER_BIT );
+	}
+#endif
 
 	return (const void *)(cmd + 1);
 }
@@ -1111,6 +1312,33 @@ const void	*RB_SwapBuffers( const void *data ) {
 
 	GLimp_LogComment( "***************** RB_SwapBuffers *****************\n\n\n" );
 
+	{
+		static int swapNum = 0;
+		swapNum++;
+		if ( swapNum <= 20 ) {
+			unsigned char px[4] = {0};
+			qglReadPixels( glConfig.vidWidth/2, glConfig.vidHeight/2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px );
+			ri.Printf( PRINT_ALL, "SWAP #%d: backbuf_center=(%d,%d,%d)\n", swapNum, px[0], px[1], px[2] );
+		}
+	}
+
+	// Expose pixel colors at multiple positions via cvar for MCP inspection
+	{
+		static int pixelFrame = 0;
+		pixelFrame++;
+		if ( (pixelFrame % 60) == 0 ) {
+			unsigned char c[4], tl[4], tr[4], bl[4], br[4];
+			int w = glConfig.vidWidth, h = glConfig.vidHeight;
+			qglReadPixels( w/2, h/2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, c );
+			qglReadPixels( w/4, 3*h/4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, tl );
+			qglReadPixels( 3*w/4, 3*h/4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, tr );
+			qglReadPixels( w/4, h/4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, bl );
+			qglReadPixels( 3*w/4, h/4, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, br );
+			ri.Cvar_Set( "r_debugPixel", va("C:%d,%d,%d TL:%d,%d,%d TR:%d,%d,%d BL:%d,%d,%d BR:%d,%d,%d",
+				c[0],c[1],c[2], tl[0],tl[1],tl[2], tr[0],tr[1],tr[2], bl[0],bl[1],bl[2], br[0],br[1],br[2]) );
+		}
+	}
+
 	GLimp_EndFrame();
 
 	backEnd.projection2D = qfalse;
@@ -1159,6 +1387,14 @@ void RB_ExecuteRenderCommands( const void *data ) {
 		case RC_CLEARDEPTH:
 			data = RB_ClearDepth(data);
 			break;
+#ifdef ELITEFORCE
+		case RC_SCISSOR:
+			data = RB_Scissor(data);
+			break;
+		case RC_ROTATE_PIC:
+			data = RB_RotatePic(data);
+			break;
+#endif
 		case RC_END_OF_LIST:
 		default:
 			// stop rendering

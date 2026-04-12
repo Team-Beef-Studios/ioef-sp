@@ -535,8 +535,20 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			// also draw the connection information, so it doesn't
 			// flash away too briefly on local or lan games
 			// refresh to update the time
+#ifdef ELITEFORCE
+			// SP local games: skip the connect screen overlay.
+			// The SP cgame handles its own loading display via
+			// CG_DrawInformation().  The UI connect screen (holodeck
+			// scan) would be drawn to one double-buffer during loading
+			// and persist there, causing visible flickering as the
+			// buffers alternate between the scan screen and the 3D scene.
+			if ( !com_sv_running || !com_sv_running->integer ) {
+#endif
 			VM_Call( uivm, UI_REFRESH, cls.realtime );
 			VM_Call( uivm, UI_DRAW_CONNECT_SCREEN, qtrue );
+#ifdef ELITEFORCE
+			}
+#endif
 			break;
 		case CA_ACTIVE:
 			// always supply STEREO_CENTER as vieworg offset is now done by the engine.
@@ -573,7 +585,6 @@ text to the screen.
 */
 void SCR_UpdateScreen( void ) {
 	static int	recursive;
-
 	if ( !scr_initialized ) {
 		return;				// not initialized yet
 	}

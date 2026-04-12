@@ -976,7 +976,19 @@ CL_FirstSnapshot
 void CL_FirstSnapshot( void ) {
 	// ignore snapshots that don't have entities
 	if ( cl.snap.snapFlags & SNAPFLAG_NOT_ACTIVE ) {
+#ifdef ELITEFORCE
+		// SP local games: the server-side client state transitions after
+		// the first snapshot is built, so early snapshots carry NOT_ACTIVE
+		// even though the game is fully initialized. Only the SP bridge
+		// needs this local-server override.
+		if ( !com_sv_running || !com_sv_running->integer ||
+			!Cvar_VariableIntegerValue( "sp_game" ) ) {
+			return;
+		}
+		// else: local server, fall through to set CA_ACTIVE
+#else
 		return;
+#endif
 	}
 	clc.state = CA_ACTIVE;
 
@@ -985,6 +997,7 @@ void CL_FirstSnapshot( void ) {
 	cl.oldServerTime = cl.snap.serverTime;
 
 	clc.timeDemoBaseTime = cl.snap.serverTime;
+
 
 	// if this is the first frame of active play,
 	// execute the contents of activeAction now
@@ -1056,6 +1069,21 @@ void CL_SetCGameTime( void ) {
 			cl.newSnapshots = qfalse;
 			CL_FirstSnapshot();
 		}
+#ifdef ELITEFORCE
+		// SP local games: force CA_ACTIVE transition.  The SP cgame uses
+		// its own snapshot bypass (SPCG_GETSNAPSHOT reads directly from
+		// game module memory).  The engine's normal snapshot delivery may
+		// produce entity data with wrong field offsets (SP entityState_t
+		// differs from ioEF entityState_t), preventing cl.newSnapshots
+		// from triggering the transition.  Without CA_ACTIVE:
+		//  - cl.serverTime never advances (CL_SetCGameTime returns early)
+		//  - the UI connect/scan screen overlays the 3D view every frame
+		//  - controls are unresponsive (time-dependent input stalls)
+		if ( clc.state != CA_ACTIVE && com_sv_running && com_sv_running->integer
+				&& cl.snap.valid ) {
+			CL_FirstSnapshot();
+		}
+#endif
 		if ( clc.state != CA_ACTIVE ) {
 			return;
 		}

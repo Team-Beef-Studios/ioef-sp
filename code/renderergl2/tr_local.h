@@ -2421,6 +2421,24 @@ typedef struct {
 	int commandId;
 } exportCubemapsCommand_t;
 
+#ifdef ELITEFORCE
+typedef struct {
+	int		commandId;
+	float	x, y;
+	float	w, h;
+} scissorCommand_t;
+
+typedef struct {
+	int		commandId;
+	shader_t	*shader;
+	float	x, y;
+	float	w, h;
+	float	s1, t1;
+	float	s2, t2;
+	float	angle;
+} rotatePicCommand_t;
+#endif
+
 typedef enum {
 	RC_END_OF_LIST,
 	RC_SET_COLOR,
@@ -2434,7 +2452,11 @@ typedef enum {
 	RC_CLEARDEPTH,
 	RC_CAPSHADOWMAP,
 	RC_POSTPROCESS,
-	RC_EXPORT_CUBEMAPS
+	RC_EXPORT_CUBEMAPS,
+#ifdef ELITEFORCE
+	RC_SCISSOR,
+	RC_ROTATE_PIC,
+#endif
 } renderCommand_t;
 
 
@@ -2472,8 +2494,14 @@ void R_AddCapShadowmapCmd( int dlight, int cubeSide );
 void R_AddPostProcessCmd (void);
 
 void RE_SetColor( const float *rgba );
-void RE_StretchPic ( float x, float y, float w, float h, 
+void RE_StretchPic ( float x, float y, float w, float h,
 					  float s1, float t1, float s2, float t2, qhandle_t hShader );
+#ifdef ELITEFORCE
+void RE_SetScissor( float x, float y, float w, float h );
+void RE_DrawRotatePic( float x, float y, float w, float h,
+					   float s1, float t1, float s2, float t2, float angle, qhandle_t hShader );
+void RE_DrawScreenShot( float x, float y, float w, float h );
+#endif
 void RE_BeginFrame( stereoFrame_t stereoFrame );
 void RE_EndFrame( int *frontEndMsec, int *backEndMsec );
 void RE_SaveJPG(char * filename, int quality, int image_width, int image_height,

@@ -1235,7 +1235,7 @@ intptr_t QDECL CL_SP_UIVmMain( int command, ... ) {
 		// lowercase names: "main", "ingame", "needcd", "newgame", etc.
 		// Passing NULL triggers UI_ForceMenuOff() to dismiss menus.
 		const char *menuname;
-		const char *menuID = NULL;
+		const char *menuID = "";
 
 		switch ( (uiMenuCommand_t)arg0 ) {
 		case UIMENU_NONE:

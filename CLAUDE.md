@@ -119,13 +119,12 @@ The SP game module uses different struct layouts from ioEF/ioquake3. All SP type
 
 ## Known Issues / Stubs
 
-The following SP features are currently stubbed (no-op or minimal implementations):
+The following SP features still need attention:
 
-- **Save/load system:** `AppendToSaveGame`, `ReadFromSaveGame`, etc.
-- **ICARUS scripting engine:** `WriteCam` and related hooks
-- **Ambient sound sets:** `S_UpdateAmbientSet`, `S_AddLocalSet`, `AS_*`
-- **Force feedback:** `FF_StartFX`, `FF_EnsureFX`, etc.
-- **Renderer extras:** `R_GetLighting`, `R_DrawRotatePic`, `R_Scissor`, `R_DrawScreenshot`
+- **Ambient sound sets:** now minimally bridged via `sound/sound.txt`, but the original Ritual ambient system likely did more than loop/select sounds (for example richer blending/volume behavior).
+- **Speech override fidelity:** `gi.S_Override` is now driven by active voice playback, but only as a boolean speech-active signal, not the original per-frame mouth/volume visualization.
+- **Force feedback:** `FF_StartFX`, `FF_EnsureFX`, etc. remain no-ops.
+- **UI scissor pic fallback:** `cl_ui_sp.c` still falls back to stretch-pic behavior where the original UI used a scissored draw helper.
 
 ## Running
 

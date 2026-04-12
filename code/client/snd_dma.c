@@ -87,6 +87,46 @@ static	channel_t		*freelist = NULL;
 int						s_rawend[MAX_RAW_STREAMS];
 portable_samplepair_t s_rawsamples[MAX_RAW_STREAMS][MAX_RAW_SAMPLES];
 
+#ifdef ELITEFORCE
+extern void SV_SP_ClearSoundOverrideStates( void );
+extern void SV_SP_SetSoundOverrideValue( int entNum, int value );
+
+#define SP_CHAN_VOICE_ATTEN 4
+#define SP_CHAN_ANNOUNCER  9
+
+static qboolean S_SP_IsSpeechChannel( int entchannel ) {
+	return entchannel == CHAN_VOICE ||
+		entchannel == SP_CHAN_VOICE_ATTEN ||
+		entchannel == SP_CHAN_ANNOUNCER;
+}
+
+static void S_SP_SyncSoundOverrides( void ) {
+	int i;
+	channel_t *ch;
+
+	SV_SP_ClearSoundOverrideStates();
+
+	for ( i = 0, ch = s_channels; i < MAX_CHANNELS; i++, ch++ ) {
+		if ( !ch->thesfx ) {
+			continue;
+		}
+
+		if ( !S_SP_IsSpeechChannel( ch->entchannel ) ) {
+			continue;
+		}
+
+		if ( ch->entnum < 0 || ch->entnum >= MAX_GENTITIES ) {
+			continue;
+		}
+
+		if ( ch->startSample == START_SAMPLE_IMMEDIATE ||
+			ch->startSample + ch->thesfx->soundLength > s_paintedtime ) {
+			SV_SP_SetSoundOverrideValue( ch->entnum, 1 );
+		}
+	}
+}
+#endif
+
 
 // ====================================================================
 // User-setable variables
@@ -710,6 +750,9 @@ void S_Base_ClearSoundBuffer( void ) {
 	Com_Memset(loopSounds, 0, MAX_GENTITIES*sizeof(loopSound_t));
 	Com_Memset(loop_channels, 0, MAX_CHANNELS*sizeof(channel_t));
 	numLoopChannels = 0;
+#ifdef ELITEFORCE
+	SV_SP_ClearSoundOverrideStates();
+#endif
 
 	S_ChannelSetup();
 
@@ -740,6 +783,9 @@ void S_Base_StopAllSounds(void) {
 	S_Base_StopBackgroundTrack();
 
 	S_Base_ClearSoundBuffer ();
+#ifdef ELITEFORCE
+	SV_SP_ClearSoundOverrideStates();
+#endif
 }
 
 /*
@@ -1225,6 +1271,9 @@ void S_Base_Update( void ) {
 	channel_t	*ch;
 
 	if ( !s_soundStarted || s_soundMuted ) {
+#ifdef ELITEFORCE
+		SV_SP_ClearSoundOverrideStates();
+#endif
 //		Com_DPrintf ("not started or muted\n");
 		return;
 	}
@@ -1250,6 +1299,10 @@ void S_Base_Update( void ) {
 
 	// mix some sound
 	S_Update_();
+
+#ifdef ELITEFORCE
+	S_SP_SyncSoundOverrides();
+#endif
 }
 
 void S_GetSoundtime(void)

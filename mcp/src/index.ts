@@ -20,29 +20,27 @@ const MCP_ROOT = path.resolve(
   path.dirname(new URL(import.meta.url).pathname).replace(/^\/([A-Z]:)/i, "$1")
 );
 const IOEF_ROOT = path.resolve(MCP_ROOT, "..", "..");
-const BUILD_DIR = path.join(IOEF_ROOT, "build", "release-mingw64-x86_64");
-const DEDICATED_EXE = path.join(BUILD_DIR, "ioq3ded.x86_64.exe");
-const CLIENT_EXE = path.join(BUILD_DIR, "ioquake3.x86_64.exe");
+const BUILD_DIR = path.join(IOEF_ROOT, "build", process.env.IOEF_BUILD_DIR ?? "release-mingw32-x86");
+const DEDICATED_EXE = path.join(BUILD_DIR, process.env.IOEF_DED_EXE ?? "ioq3ded.x86.exe");
+const CLIENT_EXE = path.join(BUILD_DIR, process.env.IOEF_CLIENT_EXE ?? "ioquake3.x86.exe");
 
 // ---------------------------------------------------------------------------
 // Game process management
 // ---------------------------------------------------------------------------
 
+const DED_EXE_NAME = path.basename(DEDICATED_EXE);
+const CLIENT_EXE_NAME = path.basename(CLIENT_EXE);
+
 function isGameRunning(): boolean {
-  try {
-    const out = execSync("tasklist /FI \"IMAGENAME eq ioq3ded.x86_64.exe\" /NH", {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    if (out.includes("ioq3ded.x86_64.exe")) return true;
-  } catch {}
-  try {
-    const out = execSync("tasklist /FI \"IMAGENAME eq ioquake3.x86_64.exe\" /NH", {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    if (out.includes("ioquake3.x86_64.exe")) return true;
-  } catch {}
+  for (const name of [DED_EXE_NAME, CLIENT_EXE_NAME]) {
+    try {
+      const out = execSync(`tasklist /FI "IMAGENAME eq ${name}" /NH`, {
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      if (out.includes(name)) return true;
+    } catch {}
+  }
   return false;
 }
 
@@ -341,7 +339,7 @@ server.tool(
   {},
   async () => {
     const results: string[] = [];
-    for (const name of ["ioq3ded.x86_64.exe", "ioquake3.x86_64.exe"]) {
+    for (const name of [DED_EXE_NAME, CLIENT_EXE_NAME, "ioq3ded.x86_64.exe", "ioquake3.x86_64.exe"]) {
       try {
         execSync(`taskkill /F /IM "${name}"`, {
           encoding: "utf8",
@@ -963,6 +961,33 @@ server.tool(
       socket.connect(GAME_PORT, GAME_HOST);
     });
 
+    return { content: [{ type: "text", text: formatJson(result) }] };
+  }
+);
+
+// -- sp_trace -----------------------------------------------------------------
+
+server.tool(
+  "sp_trace",
+  "Trace SP-specific syscalls and game imports. When enabled, captures every SP cgame syscall (ambient sound, R_DrawScreenShot, R_Scissor, force feedback, etc.) and game import call (cvar set, save/load, configstring, console commands) with arguments and return values. Actions: 'start' to begin, 'stop' to end, 'clear' to reset, or omit to read entries. Filter by name substring to find specific calls. Use since_id for polling.",
+  {
+    action: z
+      .enum(["start", "stop", "clear", "read"])
+      .default("read")
+      .describe("'start' to begin tracing, 'stop' to end, 'clear' to reset, 'read' to dump"),
+    since_id: z.number().int().default(0).describe("Only return entries after this seq ID (for polling)"),
+    max_entries: z.number().int().min(1).max(512).default(200).describe("Max entries to return (default 200, max 512)"),
+    filter: z.string().default("").describe("Optional name substring filter (e.g. 'Ambient', 'Scissor', 'Cvar')"),
+  },
+  async ({ action, since_id, max_entries, filter }) => {
+    const op = action === "read" ? "" : action;
+    const result = await queryGame({
+      cmd: "sp_trace",
+      num: since_id,
+      value: max_entries,
+      str1: filter,
+      str2: op,
+    });
     return { content: [{ type: "text", text: formatJson(result) }] };
   }
 );

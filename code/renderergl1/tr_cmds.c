@@ -233,6 +233,66 @@ void RE_StretchPic ( float x, float y, float w, float h,
 	cmd->t2 = t2;
 }
 
+#ifdef ELITEFORCE
+/*
+=============
+RE_SetScissor
+
+Sets a 2D scissor rectangle for subsequent draw calls.
+Passing zero width or height disables the scissor and restores full-screen drawing.
+=============
+*/
+void RE_SetScissor( float x, float y, float w, float h ) {
+	scissorCommand_t *cmd;
+
+	if ( !tr.registered ) {
+		return;
+	}
+	cmd = R_GetCommandBuffer( sizeof( *cmd ) );
+	if ( !cmd ) {
+		return;
+	}
+	cmd->commandId = RC_SCISSOR;
+	cmd->x = x;
+	cmd->y = y;
+	cmd->w = w;
+	cmd->h = h;
+}
+
+/*
+=============
+RE_DrawRotatePic
+
+Like DrawStretchPic but with a rotation angle (degrees) around the quad centre.
+=============
+*/
+void RE_DrawRotatePic( float x, float y, float w, float h,
+					   float s1, float t1, float s2, float t2,
+					   float angle, qhandle_t hShader ) {
+	rotatePicCommand_t *cmd;
+
+	if ( !tr.registered ) {
+		return;
+	}
+	cmd = R_GetCommandBuffer( sizeof( *cmd ) );
+	if ( !cmd ) {
+		return;
+	}
+	cmd->commandId = RC_ROTATE_PIC;
+	cmd->shader = R_GetShaderByHandle( hShader );
+	cmd->x = x;
+	cmd->y = y;
+	cmd->w = w;
+	cmd->h = h;
+	cmd->s1 = s1;
+	cmd->t1 = t1;
+	cmd->s2 = s2;
+	cmd->t2 = t2;
+	cmd->angle = angle;
+}
+
+#endif
+
 #define MODE_RED_CYAN	1
 #define MODE_RED_BLUE	2
 #define MODE_RED_GREEN	3

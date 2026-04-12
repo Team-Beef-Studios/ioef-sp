@@ -308,11 +308,13 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	// copy to the current good spot
 	cl.snap = newSnap;
 	cl.snap.ping = 999;
+	cl.snap.cmdNum = 0;
 	// calculate ping time
 	for ( i = 0 ; i < PACKET_BACKUP ; i++ ) {
 		packetNum = ( clc.netchan.outgoingSequence - 1 - i ) & PACKET_MASK;
 		if ( cl.snap.ps.commandTime >= cl.outPackets[ packetNum ].p_serverTime ) {
 			cl.snap.ping = cls.realtime - cl.outPackets[ packetNum ].p_realtime;
+			cl.snap.cmdNum = cl.outPackets[ packetNum ].p_cmdNumber + 1;
 			break;
 		}
 	}

@@ -672,6 +672,16 @@ RB_SetGL2D
 
 ================
 */
+static void RB_GetCurrentRenderTargetSize( int *width, int *height ) {
+	if ( glState.currentFBO ) {
+		*width = glState.currentFBO->width;
+		*height = glState.currentFBO->height;
+	} else {
+		*width = glConfig.vidWidth;
+		*height = glConfig.vidHeight;
+	}
+}
+
 void	RB_SetGL2D (void) {
 	mat4_t matrix;
 	int width, height;
@@ -682,16 +692,7 @@ void	RB_SetGL2D (void) {
 	backEnd.projection2D = qtrue;
 	backEnd.last2DFBO = glState.currentFBO;
 
-	if (glState.currentFBO)
-	{
-		width = glState.currentFBO->width;
-		height = glState.currentFBO->height;
-	}
-	else
-	{
-		width = glConfig.vidWidth;
-		height = glConfig.vidHeight;
-	}
+	RB_GetCurrentRenderTargetSize( &width, &height );
 
 	// set 2D virtual screen size
 	qglViewport( 0, 0, width, height );
@@ -822,6 +823,73 @@ void RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int
 	}
 }
 
+#ifdef ELITEFORCE
+void RE_DrawScreenShot( float x, float y, float w, float h ) {
+	byte *buffer;
+	int fbWidth, fbHeight;
+	GLuint texture;
+	vec4_t quadVerts[4];
+	vec2_t texCoords[4];
+
+	if ( !tr.registered ) {
+		return;
+	}
+
+	R_IssuePendingRenderCommands();
+
+	if ( tess.numIndexes ) {
+		RB_EndSurface();
+	}
+
+	RB_GetCurrentRenderTargetSize( &fbWidth, &fbHeight );
+
+	buffer = ri.Hunk_AllocateTempMemory( fbWidth * fbHeight * 4 );
+	qglReadPixels( 0, 0, fbWidth, fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, buffer );
+
+	texture = tr.scratchImage[16]->texnum;
+
+	if ( fbWidth != tr.scratchImage[16]->width || fbHeight != tr.scratchImage[16]->height ) {
+		tr.scratchImage[16]->width = tr.scratchImage[16]->uploadWidth = fbWidth;
+		tr.scratchImage[16]->height = tr.scratchImage[16]->uploadHeight = fbHeight;
+		qglTextureImage2D( texture, GL_TEXTURE_2D, 0, GL_RGBA8, fbWidth, fbHeight, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, buffer );
+		qglTextureParameterf( texture, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+		qglTextureParameterf( texture, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+		qglTextureParameterf( texture, GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+		qglTextureParameterf( texture, GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+	} else {
+		qglTextureSubImage2D( texture, GL_TEXTURE_2D, 0, 0, 0, fbWidth, fbHeight,
+			GL_RGBA, GL_UNSIGNED_BYTE, buffer );
+	}
+
+	ri.Hunk_FreeTempMemory( buffer );
+
+	if (glRefConfig.framebufferObject)
+		FBO_Bind(backEnd.framePostProcessed ? NULL : tr.renderFbo);
+
+	RB_SetGL2D();
+
+	GL_BindToTMU( tr.scratchImage[16], TB_COLORMAP );
+
+	/* Framebuffer is bottom-up, 2D ortho is top-down -- flip vertically. */
+	VectorSet4( quadVerts[0], x,     y,     0.0f, 1.0f );
+	VectorSet4( quadVerts[1], x + w, y,     0.0f, 1.0f );
+	VectorSet4( quadVerts[2], x + w, y + h, 0.0f, 1.0f );
+	VectorSet4( quadVerts[3], x,     y + h, 0.0f, 1.0f );
+
+	VectorSet2( texCoords[0], 0.0f, 1.0f );
+	VectorSet2( texCoords[1], 1.0f, 1.0f );
+	VectorSet2( texCoords[2], 1.0f, 0.0f );
+	VectorSet2( texCoords[3], 0.0f, 0.0f );
+
+	GLSL_BindProgram( &tr.textureColorShader );
+	GLSL_SetUniformMat4( &tr.textureColorShader, UNIFORM_MODELVIEWPROJECTIONMATRIX, glState.modelviewProjection );
+	GLSL_SetUniformVec4( &tr.textureColorShader, UNIFORM_COLOR, colorWhite );
+
+	RB_InstantQuad2( quadVerts, texCoords );
+}
+#endif
+
 
 /*
 =============
@@ -924,6 +992,117 @@ const void *RB_StretchPic ( const void *data ) {
 
 	return (const void *)(cmd + 1);
 }
+
+#ifdef ELITEFORCE
+static const void *RB_Scissor( const void *data ) {
+	const scissorCommand_t *cmd;
+	int width, height;
+
+	cmd = (const scissorCommand_t *)data;
+
+	if (glRefConfig.framebufferObject)
+		FBO_Bind(backEnd.framePostProcessed ? NULL : tr.renderFbo);
+
+	RB_SetGL2D();
+
+	if ( tess.numIndexes ) {
+		RB_EndSurface();
+	}
+
+	RB_GetCurrentRenderTargetSize( &width, &height );
+
+	if ( cmd->w <= 0 || cmd->h <= 0 ) {
+		qglEnable( GL_SCISSOR_TEST );
+		qglScissor( 0, 0, width, height );
+	} else {
+		int sx = (int)cmd->x;
+		int sy = height - (int)( cmd->y + cmd->h );
+		int sw = (int)cmd->w;
+		int sh = (int)cmd->h;
+		qglEnable( GL_SCISSOR_TEST );
+		qglScissor( sx, sy, sw, sh );
+	}
+
+	return (const void *)( cmd + 1 );
+}
+
+static const void *RB_RotatePic( const void *data ) {
+	const rotatePicCommand_t *cmd;
+	shader_t *shader;
+	int		numVerts, numIndexes;
+	float	cx, cy, cosA, sinA, dx, dy;
+	float	vx[4], vy[4];
+	int		i;
+
+	cmd = (const rotatePicCommand_t *)data;
+
+	if (glRefConfig.framebufferObject)
+		FBO_Bind(backEnd.framePostProcessed ? NULL : tr.renderFbo);
+
+	RB_SetGL2D();
+
+	shader = cmd->shader;
+	if ( shader != tess.shader ) {
+		if ( tess.numIndexes ) {
+			RB_EndSurface();
+		}
+		backEnd.currentEntity = &backEnd.entity2D;
+		RB_BeginSurface( shader, 0, 0 );
+	}
+
+	RB_CHECKOVERFLOW( 4, 6 );
+	numVerts = tess.numVertexes;
+	numIndexes = tess.numIndexes;
+
+	tess.numVertexes += 4;
+	tess.numIndexes += 6;
+
+	tess.indexes[ numIndexes ] = numVerts + 3;
+	tess.indexes[ numIndexes + 1 ] = numVerts + 0;
+	tess.indexes[ numIndexes + 2 ] = numVerts + 2;
+	tess.indexes[ numIndexes + 3 ] = numVerts + 2;
+	tess.indexes[ numIndexes + 4 ] = numVerts + 0;
+	tess.indexes[ numIndexes + 5 ] = numVerts + 1;
+
+	{
+		vec4_t color;
+		VectorScale4(backEnd.color2D, 1.0f / 255.0f, color);
+		VectorCopy4(color, tess.vertexColors[ numVerts ]);
+		VectorCopy4(color, tess.vertexColors[ numVerts + 1 ]);
+		VectorCopy4(color, tess.vertexColors[ numVerts + 2 ]);
+		VectorCopy4(color, tess.vertexColors[ numVerts + 3 ]);
+	}
+
+	vx[0] = cmd->x;            vy[0] = cmd->y;
+	vx[1] = cmd->x + cmd->w;   vy[1] = cmd->y;
+	vx[2] = cmd->x + cmd->w;   vy[2] = cmd->y + cmd->h;
+	vx[3] = cmd->x;            vy[3] = cmd->y + cmd->h;
+
+	cx = cmd->x + cmd->w * 0.5f;
+	cy = cmd->y + cmd->h * 0.5f;
+	cosA = cos( DEG2RAD( cmd->angle ) );
+	sinA = sin( DEG2RAD( cmd->angle ) );
+
+	for ( i = 0; i < 4; i++ ) {
+		dx = vx[i] - cx;
+		dy = vy[i] - cy;
+		tess.xyz[ numVerts + i ][0] = cx + dx * cosA - dy * sinA;
+		tess.xyz[ numVerts + i ][1] = cy + dx * sinA + dy * cosA;
+		tess.xyz[ numVerts + i ][2] = 0;
+	}
+
+	tess.texCoords[ numVerts ][0][0] = cmd->s1;
+	tess.texCoords[ numVerts ][0][1] = cmd->t1;
+	tess.texCoords[ numVerts + 1 ][0][0] = cmd->s2;
+	tess.texCoords[ numVerts + 1 ][0][1] = cmd->t1;
+	tess.texCoords[ numVerts + 2 ][0][0] = cmd->s2;
+	tess.texCoords[ numVerts + 2 ][0][1] = cmd->t2;
+	tess.texCoords[ numVerts + 3 ][0][0] = cmd->s1;
+	tess.texCoords[ numVerts + 3 ][0][1] = cmd->t2;
+
+	return (const void *)( cmd + 1 );
+}
+#endif
 
 
 /*
@@ -1817,6 +1996,14 @@ void RB_ExecuteRenderCommands( const void *data ) {
 		case RC_EXPORT_CUBEMAPS:
 			data = RB_ExportCubemaps(data);
 			break;
+#ifdef ELITEFORCE
+		case RC_SCISSOR:
+			data = RB_Scissor(data);
+			break;
+		case RC_ROTATE_PIC:
+			data = RB_RotatePic(data);
+			break;
+#endif
 		case RC_END_OF_LIST:
 		default:
 			// finish any 2D drawing if needed

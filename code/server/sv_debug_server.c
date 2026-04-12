@@ -15,6 +15,7 @@ Enable with cvar: sv_debugPort (default 29070, 0 = disabled)
 
 #include "server.h"
 #include "../qcommon/sp_types.h"
+#include <inttypes.h>
 #include <stddef.h>
 #include <math.h>
 
@@ -118,6 +119,55 @@ static int            vmTraceCount = 0;
 static qboolean       vmTraceEnabled = qfalse;
 
 // ------------------------------------------------------------------
+// SP syscall / game-import trace ring buffer
+// ------------------------------------------------------------------
+
+#define SPTRACE_RING_SIZE 2048
+#define SPTRACE_STR_MAX   128
+
+typedef struct {
+	int         id;             // syscall or import ID
+	char        name[48];       // human-readable name
+	intptr_t    args[6];        // first 6 integer args
+	char        strArg[SPTRACE_STR_MAX]; // first string arg (if any)
+	intptr_t    retVal;         // return value
+	int         serverTime;
+	int         frameNum;
+	qboolean    isImport;       // qtrue = game import, qfalse = cgame syscall
+} spTraceEntry_t;
+
+static spTraceEntry_t spTraceRing[SPTRACE_RING_SIZE];
+static int            spTraceHead = 0;
+static int            spTraceCount = 0;
+static qboolean       spTraceEnabled = qfalse;
+
+void DebugServer_TraceSPCall(int id, const char *name, qboolean isImport,
+	intptr_t a0, intptr_t a1, intptr_t a2, intptr_t a3, intptr_t a4, intptr_t a5,
+	const char *strArg, intptr_t retVal)
+{
+	if (!spTraceEnabled) return;
+	spTraceEntry_t *e = &spTraceRing[spTraceHead % SPTRACE_RING_SIZE];
+	e->id = id;
+	Q_strncpyz(e->name, name, sizeof(e->name));
+	e->args[0] = a0; e->args[1] = a1; e->args[2] = a2;
+	e->args[3] = a3; e->args[4] = a4; e->args[5] = a5;
+	if (strArg && strArg[0])
+		Q_strncpyz(e->strArg, strArg, sizeof(e->strArg));
+	else
+		e->strArg[0] = '\0';
+	e->retVal = retVal;
+	e->serverTime = sv.time;
+	if ( sv_fps && sv_fps->integer > 0 ) {
+		e->frameNum = ( sv.time * sv_fps->integer ) / 1000;
+	} else {
+		e->frameNum = sv.time / 50;
+	}
+	e->isImport = isImport;
+	spTraceHead++;
+	spTraceCount++;
+}
+
+// ------------------------------------------------------------------
 // JSON response builder helpers
 // ------------------------------------------------------------------
 
@@ -125,30 +175,52 @@ typedef struct {
 	char    *buf;
 	int     len;
 	int     cap;
+	qboolean overflowed;
 } jsonBuf_t;
 
 static void jb_init(jsonBuf_t *jb, char *buf, int cap) {
 	jb->buf = buf;
 	jb->len = 0;
 	jb->cap = cap;
+	jb->overflowed = qfalse;
 }
 
-static void jb_raw(jsonBuf_t *jb, const char *s) {
-	int slen = strlen(s);
+static void jb_raw_len(jsonBuf_t *jb, const char *s, int slen) {
 	if (jb->len + slen < jb->cap) {
 		memcpy(jb->buf + jb->len, s, slen);
 		jb->len += slen;
+	} else {
+		jb->overflowed = qtrue;
 	}
+}
+
+static void jb_raw(jsonBuf_t *jb, const char *s) {
+	jb_raw_len(jb, s, strlen(s));
 }
 
 static void jb_printf(jsonBuf_t *jb, const char *fmt, ...) {
 	va_list ap;
 	int avail = jb->cap - jb->len;
-	if (avail <= 0) return;
+	if (avail <= 0) {
+		jb->overflowed = qtrue;
+		return;
+	}
 	va_start(ap, fmt);
 	int n = vsnprintf(jb->buf + jb->len, avail, fmt, ap);
 	va_end(ap);
-	if (n > 0 && n < avail) jb->len += n;
+	if (n > 0 && n < avail) {
+		jb->len += n;
+	} else if (n != 0) {
+		jb->overflowed = qtrue;
+	}
+}
+
+static int jb_remaining(const jsonBuf_t *jb) {
+	return jb->cap - jb->len;
+}
+
+static qboolean jb_can_append(const jsonBuf_t *jb, int extraLen) {
+	return jb_remaining(jb) > extraLen;
 }
 
 static void jb_str(jsonBuf_t *jb, const char *key, const char *val) {
@@ -167,6 +239,16 @@ static void jb_str(jsonBuf_t *jb, const char *key, const char *val) {
 
 static void jb_int(jsonBuf_t *jb, const char *key, int val) {
 	jb_printf(jb, "\"%s\":%d", key, val);
+}
+
+static void jb_intptr(jsonBuf_t *jb, const char *key, intptr_t val) {
+	jb_printf(jb, "\"%s\":%" PRIdPTR, key, val);
+}
+
+static void jb_intptr_array6(jsonBuf_t *jb, const char *key, const intptr_t vals[6]) {
+	jb_printf(jb,
+		"\"%s\":[%" PRIdPTR ",%" PRIdPTR ",%" PRIdPTR ",%" PRIdPTR ",%" PRIdPTR ",%" PRIdPTR "]",
+		key, vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
 }
 
 static void jb_float(jsonBuf_t *jb, const char *key, float val) __attribute__((unused));
@@ -2726,6 +2808,100 @@ static void debug_cmd_teleport(jsonBuf_t *jb, int num, const char *posStr) {
 static void debug_handle_batch(debugClient_t *client, const char *json);
 
 // ------------------------------------------------------------------
+// SP syscall/import trace query
+// ------------------------------------------------------------------
+
+static void debug_cmd_sp_trace(jsonBuf_t *jb, const debugCmd_t *cmd) {
+	jb_raw(jb, "{");
+	jb_str(jb, "type", "sp_trace");
+
+	if (!strcmp(cmd->strArg2, "start")) {
+		spTraceEnabled = qtrue;
+		spTraceHead = 0;
+		spTraceCount = 0;
+		jb_raw(jb, ","); jb_str(jb, "action", "started");
+	} else if (!strcmp(cmd->strArg2, "stop")) {
+		spTraceEnabled = qfalse;
+		jb_raw(jb, ","); jb_str(jb, "action", "stopped");
+		jb_raw(jb, ","); jb_int(jb, "totalCalls", spTraceCount);
+	} else if (!strcmp(cmd->strArg2, "clear")) {
+		spTraceHead = 0;
+		spTraceCount = 0;
+		jb_raw(jb, ","); jb_str(jb, "action", "cleared");
+	} else {
+		// Read trace entries with optional filters
+		jb_raw(jb, ","); jb_bool(jb, "enabled", spTraceEnabled);
+		jb_raw(jb, ","); jb_int(jb, "totalCalls", spTraceCount);
+		jb_raw(jb, ",\"entries\":[");
+
+		int startIdx = spTraceHead - SPTRACE_RING_SIZE;
+		if (startIdx < 0) startIdx = 0;
+		int sinceId = cmd->hasIntArg1 ? cmd->intArg1 : startIdx;
+		if (sinceId < startIdx) sinceId = startIdx;
+		if (sinceId > spTraceHead) sinceId = spTraceHead;
+
+		int maxEntries = cmd->hasIntArg2 ? cmd->intArg2 : 200;
+		if (maxEntries <= 0 || maxEntries > SPTRACE_RING_SIZE) maxEntries = 200;
+
+		// Optional name filter from strArg1
+		const char *nameFilter = cmd->strArg1[0] ? cmd->strArg1 : NULL;
+
+		int first = 1;
+		int count = 0;
+		int nextId = sinceId;
+		qboolean truncated = qfalse;
+		int i;
+		const int trailerReserve = 96;
+		for (i = sinceId; i < spTraceHead && count < maxEntries; i++) {
+			spTraceEntry_t *e = &spTraceRing[i % SPTRACE_RING_SIZE];
+			char entryBuf[768];
+			jsonBuf_t entryJb;
+
+			// Apply name filter if specified
+			if (nameFilter && !strstr(e->name, nameFilter)) {
+				nextId = i + 1;
+				continue;
+			}
+
+			jb_init(&entryJb, entryBuf, sizeof(entryBuf));
+			jb_raw(&entryJb, "{");
+			jb_int(&entryJb, "seq", i);
+			jb_raw(&entryJb, ","); jb_int(&entryJb, "id", e->id);
+			jb_raw(&entryJb, ","); jb_str(&entryJb, "name", e->name);
+			jb_raw(&entryJb, ","); jb_bool(&entryJb, "isImport", e->isImport);
+			jb_raw(&entryJb, ","); jb_int(&entryJb, "serverTime", e->serverTime);
+			jb_raw(&entryJb, ","); jb_int(&entryJb, "frame", e->frameNum);
+			jb_raw(&entryJb, ","); jb_intptr_array6(&entryJb, "args", e->args);
+			jb_raw(&entryJb, ","); jb_intptr(&entryJb, "ret", e->retVal);
+			if (e->strArg[0]) {
+				jb_raw(&entryJb, ","); jb_str(&entryJb, "str", e->strArg);
+			}
+			jb_raw(&entryJb, "}");
+
+			if (entryJb.overflowed ||
+				!jb_can_append(jb, entryJb.len + (first ? 0 : 1) + trailerReserve)) {
+				truncated = qtrue;
+				break;
+			}
+
+			if (!first) jb_raw(jb, ",");
+			first = 0;
+			jb_raw_len(jb, entryBuf, entryJb.len);
+			count++;
+			nextId = i + 1;
+		}
+		jb_raw(jb, "],");
+		jb_int(jb, "returned", count);
+		jb_raw(jb, ","); jb_int(jb, "nextId", nextId);
+		if (truncated) {
+			jb_raw(jb, ","); jb_bool(jb, "truncated", qtrue);
+		}
+	}
+
+	jb_raw(jb, "}\n");
+}
+
+// ------------------------------------------------------------------
 // Command dispatch
 // ------------------------------------------------------------------
 
@@ -2832,6 +3008,8 @@ static void debug_handle_command(debugClient_t *client, const char *json) {
 		jb_raw(&jb, ",");
 		jb_str(&jb, "error", "batch must be sent as a JSON array, not an object");
 		jb_raw(&jb, "}\n");
+	} else if (!strcmp(cmd.cmd, "sp_trace")) {
+		debug_cmd_sp_trace(&jb, &cmd);
 	} else if (!strcmp(cmd.cmd, "ping")) {
 		jb_raw(&jb, "{\"type\":\"pong\"}\n");
 	} else {
@@ -2840,7 +3018,7 @@ static void debug_handle_command(debugClient_t *client, const char *json) {
 		jb_raw(&jb, ",");
 		jb_str(&jb, "error", "unknown command");
 		jb_raw(&jb, ",");
-		jb_str(&jb, "available", "status, entity, entities, entities_annotated, entity_annotated, player, layout, validate, search, cvar, cvarlist, configstrings, log, exec, set_entity, set_player, trace, entities_in_box, watch, vmtrace, memory, time, maplist, snapshot, peek, point_contents, strings, funcscan, bulkscan, client_peek, client_strings, teleport, batch, ping");
+		jb_str(&jb, "available", "status, entity, entities, entities_annotated, entity_annotated, player, layout, validate, search, cvar, cvarlist, configstrings, log, exec, set_entity, set_player, trace, entities_in_box, watch, vmtrace, memory, time, maplist, snapshot, peek, point_contents, strings, funcscan, bulkscan, client_peek, client_strings, teleport, sp_trace, batch, ping");
 		jb_raw(&jb, "}\n");
 	}
 

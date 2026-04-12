@@ -515,6 +515,9 @@ void		DebugServer_Shutdown( void );
 void		DebugServer_Frame( void );
 void		DebugServer_LogCapture( const char *text );
 void		DebugServer_TraceVMCall( int command, int serverTime, int durationUsec );
+void		DebugServer_TraceSPCall( int id, const char *name, qboolean isImport,
+				intptr_t a0, intptr_t a1, intptr_t a2, intptr_t a3, intptr_t a4, intptr_t a5,
+				const char *strArg, intptr_t retVal );
 qboolean	DebugServer_IsPaused( void );
 
 //

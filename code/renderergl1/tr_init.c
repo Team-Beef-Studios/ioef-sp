@@ -1325,9 +1325,6 @@ Touch all images to make sure they are resident
 */
 void RE_EndRegistration( void ) {
 	R_IssuePendingRenderCommands();
-	if (!ri.Sys_LowPhysicalMemory()) {
-		RB_ShowImages();
-	}
 }
 
 
@@ -1397,6 +1394,12 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.inPVS = R_inPVS;
 
 	re.TakeVideoFrame = RE_TakeVideoFrame;
+
+#ifdef ELITEFORCE
+	re.SetScissor = RE_SetScissor;
+	re.DrawRotatePic = RE_DrawRotatePic;
+	re.DrawScreenShot = RE_DrawScreenShot;
+#endif
 
 	return &re;
 }
