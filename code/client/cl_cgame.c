@@ -811,6 +811,13 @@ void CL_InitCGame( void ) {
 				currentVM = cgvm;
 				cgDllEntry( VM_DllSyscall );
 
+				/* Save the live syscall so SV_SP_RestoreCgameSyscall can
+				   re-bind it after server-side game calls. */
+				{
+					extern void SV_SP_SaveCgameSyscall( intptr_t (*)(intptr_t, ...) );
+					SV_SP_SaveCgameSyscall( VM_DllSyscall );
+				}
+
 				clc.state = CA_LOADING;
 				VM_Call( cgvm, CG_INIT, clc.serverMessageSequence );
 				Com_Printf( "SP cgame initialized from efgamex86.dll\n" );

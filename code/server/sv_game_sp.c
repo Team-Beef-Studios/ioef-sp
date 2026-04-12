@@ -2183,6 +2183,40 @@ static intptr_t QDECL SV_SP_CgameSyscallStub( intptr_t arg, ... ) {
 	return 0;
 }
 
+/*
+===============
+SV_SP_BindCgameStub / SV_SP_RestoreCgameSyscall
+
+The SP DLL has a single dllEntry export shared between game and cgame.
+During server-side execution (ClientThink, RunFrame), any cgame code
+that runs inside the DLL must NOT use the live cgame syscall dispatcher
+(VM_DllSyscall with currentVM=gvm), because that routes cgame trap
+numbers through the game syscall handler, causing strncpy crashes on
+bad pointers.
+
+These functions swap the DLL's syscall pointer to/from the safe stub
+around every game-side VM call.
+===============
+*/
+static void (*sp_cgameDllEntry)( intptr_t (*syscallptr)( intptr_t, ... ) );
+static intptr_t (*sp_savedCgameSyscall)( intptr_t, ... );
+
+static void SV_SP_BindCgameStub( void ) {
+	if ( sp_cgameDllEntry ) {
+		sp_cgameDllEntry( SV_SP_CgameSyscallStub );
+	}
+}
+
+static void SV_SP_RestoreCgameSyscall( void ) {
+	if ( sp_cgameDllEntry && sp_savedCgameSyscall ) {
+		sp_cgameDllEntry( sp_savedCgameSyscall );
+	}
+}
+
+void SV_SP_SaveCgameSyscall( intptr_t (*syscall)( intptr_t, ... ) ) {
+	sp_savedCgameSyscall = syscall;
+}
+
 void SV_SP_InitGameProgs( void ) {
 	sp_game_export_t *(*GetGameAPI)( sp_game_import_t *import );
 	char dllPath[MAX_OSPATH];
@@ -2236,10 +2270,9 @@ void SV_SP_InitGameProgs( void ) {
 	// Without this, the server will crash during the first RunFrame that
 	// triggers any shared game/cgame code path.
 	{
-		void (*cgameDllEntry)( intptr_t (*syscallptr)( intptr_t, ... ) );
-		cgameDllEntry = (void (*)(intptr_t (*)(intptr_t, ...)))Sys_LoadFunction( gameLibrary, "dllEntry" );
-		if ( cgameDllEntry ) {
-			cgameDllEntry( SV_SP_CgameSyscallStub );
+		sp_cgameDllEntry = (void (*)(intptr_t (*)(intptr_t, ...)))Sys_LoadFunction( gameLibrary, "dllEntry" );
+		if ( sp_cgameDllEntry ) {
+			sp_cgameDllEntry( SV_SP_CgameSyscallStub );
 			Com_Printf( "SP cgame dllEntry initialized with stub syscall handler\n" );
 		}
 	}
@@ -2518,7 +2551,9 @@ intptr_t QDECL SV_SP_GameVmMain( int command, ... ) {
 		spCmd.forwardmove = cmd->forwardmove;
 		spCmd.rightmove = cmd->rightmove;
 		spCmd.upmove = cmd->upmove;
+		SV_SP_BindCgameStub();
 		ge->ClientThink( arg0, &spCmd );
+		SV_SP_RestoreCgameSyscall();
 		// Update entity count in case the game changed it
 		sv.num_entities = ge->num_entities;
 		return 0;
@@ -2527,7 +2562,9 @@ intptr_t QDECL SV_SP_GameVmMain( int command, ... ) {
 	case GAME_RUN_FRAME:
 		// Sync entities before the frame so traces during RunFrame see current data
 		SV_SP_SyncAllEntities();
+		SV_SP_BindCgameStub();
 		ge->RunFrame( arg0 );
+		SV_SP_RestoreCgameSyscall();
 		// Sync again after the frame for snapshot building
 		SV_SP_SyncAllEntities();
 		return 0;

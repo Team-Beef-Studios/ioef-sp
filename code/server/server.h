@@ -429,6 +429,7 @@ void		*SV_SP_GetGameLibrary( void );
 void		*SV_SP_GetRawPlayerState( void );
 sp_entityState_t *SV_SP_GetRawEntityState( int entNum );
 void		SV_SP_UnloadDLL( void );
+void		SV_SP_SaveCgameSyscall( intptr_t (*syscall)( intptr_t, ... ) );
 qboolean	SV_SP_SaveGame( const char *slotName );
 qboolean	SV_SP_LoadGame( const char *slotName );
 qboolean	SV_SP_WipeSaveGame( const char *slotName );
@@ -512,6 +513,9 @@ void SV_ClipToEntity( trace_t *trace, const vec3_t start, const vec3_t mins, con
 void		DebugServer_Init( void );
 void		DebugServer_Shutdown( void );
 void		DebugServer_Frame( void );
+void		DebugServer_LogCapture( const char *text );
+void		DebugServer_TraceVMCall( int command, int serverTime, int durationUsec );
+qboolean	DebugServer_IsPaused( void );
 
 //
 // sv_net_chan.c
