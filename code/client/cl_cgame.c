@@ -274,6 +274,13 @@ qboolean CL_GetServerCommand( int serverCommandNumber ) {
 	}
 
 	if ( serverCommandNumber > clc.serverCommandSequence ) {
+#ifdef ELITEFORCE
+		// SP mode: the cgame may request commands beyond what the engine
+		// has tracked.  Don't crash -- just return false.
+		if ( com_sv_running && com_sv_running->integer ) {
+			return qfalse;
+		}
+#endif
 		Com_Error( ERR_DROP, "CL_GetServerCommand: requested a command not received" );
 		return qfalse;
 	}
@@ -1334,6 +1341,18 @@ void CL_SetCGameTime( void ) {
 			cl.serverTime = cl.oldServerTime;
 		}
 		cl.oldServerTime = cl.serverTime;
+
+#ifdef ELITEFORCE
+		{
+			static int timeLogCount = 0;
+			timeLogCount++;
+			if ( timeLogCount <= 5 || (timeLogCount % 300) == 0 ) {
+				Com_Printf( "[TIME_DBG] #%d serverTime=%d realtime=%d delta=%d snapTime=%d snapMsg=%d\n",
+					timeLogCount, cl.serverTime, cls.realtime, cl.serverTimeDelta,
+					cl.snap.serverTime, cl.snap.messageNum );
+			}
+		}
+#endif
 
 		// note if we are almost past the latest frame (without timeNudge),
 		// so we will try and adjust back a bit when the next snapshot arrives

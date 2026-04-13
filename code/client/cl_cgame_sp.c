@@ -1241,7 +1241,15 @@ intptr_t CL_SPCgameSystemCalls( intptr_t *args ) {
 		   original value here so the SP cgame can run prediction against the
 		   same command stream it was built for. */
 		spSnap->cmdNum = clSnap->cmdNum;
-		spSnap->serverCommandSequence = tempSnap.serverCommandSequence;
+		/* Clamp serverCommandSequence to the last command the cgame
+		   has already processed.  The SP cgame calls
+		   CG_ExecuteNewServerCommands(snap->serverCommandSequence)
+		   which iterates from the old sequence to the new one.
+		   If the new sequence is ahead of what CL_GetServerCommand
+		   can serve, it crashes with "requested a command not received".
+		   Setting it to clc.lastExecutedServerCommand ensures the
+		   cgame doesn't try to execute commands it hasn't seen. */
+		spSnap->serverCommandSequence = clc.lastExecutedServerCommand;
 		spSnap->numServerCommands = 0;
 		spSnap->numConfigstringChanges = 0;
 		spSnap->configstringNum = 0;
