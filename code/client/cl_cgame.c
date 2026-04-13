@@ -1106,9 +1106,11 @@ void CL_SetCGameTime( void ) {
 			if ( cameraActiveTime == 0 ) {
 				cameraActiveTime = cls.realtime;
 			}
-			// After 5 seconds, force-skip the cutscene by telling
+			// After 30 seconds, force-skip the cutscene by telling
 			// the game DLL to disable the camera and unlock the player.
-			if ( cls.realtime - cameraActiveTime > 5000 ) {
+			// Most SP cutscenes are 10-25 seconds; 30s is a safe timeout
+			// that allows them to complete naturally.
+			if ( cls.realtime - cameraActiveTime > 30000 ) {
 				Cvar_Set( "sp_skip_cutscene", "1" );
 			}
 		} else {
