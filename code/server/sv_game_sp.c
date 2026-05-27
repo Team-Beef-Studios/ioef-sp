@@ -2284,6 +2284,14 @@ void SV_SP_SaveCgameSyscall( intptr_t (*syscall)( intptr_t, ... ) ) {
 	sp_savedCgameSyscall = syscall;
 }
 
+/*
+ * SP game DLL filename is arch-derived: ARCH_STRING is "x86" for a 32-bit build,
+ * "x86_64" for 64-bit (and whatever it resolves to on other arches).  This must
+ * match the DLL project's TargetName ("efgame" + ARCH_STRING).  Keeping it derived
+ * means one engine source builds the correct loader for any target architecture.
+ */
+#define SP_GAME_DLL_NAME	"efgame" ARCH_STRING DLL_EXT
+
 void SV_SP_InitGameProgs( void ) {
 	sp_game_export_t *(*GetGameAPI)( sp_game_import_t *import );
 	char dllPath[MAX_OSPATH];
@@ -2298,7 +2306,7 @@ void SV_SP_InitGameProgs( void ) {
 	 * Only load it if this is the first time or if the engine fully shut down.
 	 */
 	if ( !gameLibrary ) {
-		Com_Printf( "Loading SP game module: efgamex86.dll\n" );
+		Com_Printf( "Loading SP game module: " SP_GAME_DLL_NAME "\n" );
 
 		basepath = Cvar_VariableString( "fs_basepath" );
 		gamedir = Cvar_VariableString( "fs_game" );
@@ -2307,16 +2315,16 @@ void SV_SP_InitGameProgs( void ) {
 			gamedir = Cvar_VariableString( "com_basegame" );
 		}
 
-		Com_sprintf( dllPath, sizeof(dllPath), "%s/%s/efgamex86.dll", basepath, gamedir );
+		Com_sprintf( dllPath, sizeof(dllPath), "%s/%s/" SP_GAME_DLL_NAME, basepath, gamedir );
 		Com_Printf( "Try loading dll file %s\n", dllPath );
 		gameLibrary = Sys_LoadLibrary( dllPath );
 
 		if ( !gameLibrary ) {
-			gameLibrary = Sys_LoadLibrary( "efgamex86.dll" );
+			gameLibrary = Sys_LoadLibrary( SP_GAME_DLL_NAME );
 		}
 
 		if ( !gameLibrary ) {
-			Com_Error( ERR_FATAL, "SV_SP_InitGameProgs: failed to load efgamex86.dll\n"
+			Com_Error( ERR_FATAL, "SV_SP_InitGameProgs: failed to load " SP_GAME_DLL_NAME "\n"
 					   "Searched: %s", dllPath );
 		}
 	} else {
@@ -2329,7 +2337,7 @@ void SV_SP_InitGameProgs( void ) {
 	if ( !GetGameAPI ) {
 		Sys_UnloadLibrary( gameLibrary );
 		gameLibrary = NULL;
-		Com_Error( ERR_FATAL, "SV_SP_InitGameProgs: efgamex86.dll missing GetGameAPI export" );
+		Com_Error( ERR_FATAL, "SV_SP_InitGameProgs: " SP_GAME_DLL_NAME " missing GetGameAPI export" );
 	}
 
 	// CRITICAL: Initialize the cgame's syscall pointer before calling

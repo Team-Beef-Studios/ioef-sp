@@ -573,7 +573,7 @@ ifdef MINGW
   endif
 
   ifeq ($(USE_CODEC_MP3),1)
-    ifeq ($(ARCH),x64)
+    ifeq ($(ARCH),x86_64)
       CLIENT_LIBS += $(LIBSDIR)/win64/libmad.a
     else
       CLIENT_LIBS += $(LIBSDIR)/win32/libmad.a
@@ -619,7 +619,7 @@ ifdef MINGW
   # it.  Re-add it here (after the reset) so mp3 audio actually links -- the EF
   # SP voice-overs (sound/voice/.../*.mp3) are mp3 and are silent without it.
   ifeq ($(USE_CODEC_MP3),1)
-    ifeq ($(ARCH),x64)
+    ifeq ($(ARCH),x86_64)
       CLIENT_LIBS += $(LIBSDIR)/win64/libmad.a
     else
       CLIENT_LIBS += $(LIBSDIR)/win32/libmad.a

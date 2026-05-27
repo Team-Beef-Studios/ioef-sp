@@ -277,11 +277,16 @@ static void CL_SP_NoteVoiceSound( int entnum, int channel, sfxHandle_t sfx ) {
  *           resolves them to real pointers in the engine's address space.
  * VMF(x) -- reinterprets the integer argument at position x as a float.
  *           Q3 engine syscalls pass floats as bit-identical integers.
+ *           NOTE: read the float from the low bytes of the x-th pointer-width
+ *           (intptr_t) arg slot.  The old `((float *)args)[x]` form indexed at a
+ *           4-byte stride, which only matches the 8-byte arg stride on 32-bit; on
+ *           64-bit it read every float from the wrong (half-shifted) offset,
+ *           scrambling all float syscall args (e.g. text/2D draw coords).
  */
 #undef VMA
 #undef VMF
 #define	VMA(x) VM_ArgPtr(args[x])
-#define	VMF(x) ((float *)args)[x]
+#define	VMF(x) ( *(float *)&args[x] )
 
 /*
  * FloatAsInt: type-pun a float to an int for returning float values through

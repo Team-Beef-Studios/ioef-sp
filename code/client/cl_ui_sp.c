@@ -1060,6 +1060,13 @@ Loads the EF1 singleplayer UI DLL (efuix86.dll), calls GetUIAPI to get the
 export table, validates the API version, and calls UI_Init.
 ===============
 */
+/*
+ * SP UI DLL filename is arch-derived (ARCH_STRING is "x86" / "x86_64" / ...), so
+ * one engine source builds the loader for any target arch.  Must match the UI
+ * project's TargetName ("efui" + ARCH_STRING).  See sv_game_sp.c for the game one.
+ */
+#define SP_UI_DLL_NAME	"efui" ARCH_STRING DLL_EXT
+
 void CL_SP_InitUI( void ) {
 	sp_uiexport_t *(*GetUIAPI)( void );
 	char dllPath[MAX_OSPATH];
@@ -1070,7 +1077,7 @@ void CL_SP_InitUI( void ) {
 	CL_SP_InitUIImport();
 
 	// Load the SP UI DLL
-	Com_Printf( "Loading SP UI module: efuix86.dll\n" );
+	Com_Printf( "Loading SP UI module: " SP_UI_DLL_NAME "\n" );
 
 	basepath = Cvar_VariableString( "fs_basepath" );
 	gamedir = Cvar_VariableString( "fs_game" );
@@ -1079,18 +1086,18 @@ void CL_SP_InitUI( void ) {
 		gamedir = Cvar_VariableString( "com_basegame" );
 	}
 
-	// Try basepath/gamedir/efuix86.dll first
-	Com_sprintf( dllPath, sizeof(dllPath), "%s/%s/efuix86.dll", basepath, gamedir );
+	// Try basepath/gamedir/<ui dll> first
+	Com_sprintf( dllPath, sizeof(dllPath), "%s/%s/" SP_UI_DLL_NAME, basepath, gamedir );
 	Com_Printf( "Try loading dll file %s\n", dllPath );
 	uiLibrary = Sys_LoadLibrary( dllPath );
 
 	if ( !uiLibrary ) {
-		// Try just efuix86.dll in current directory
-		uiLibrary = Sys_LoadLibrary( "efuix86.dll" );
+		// Try just the UI dll in current directory
+		uiLibrary = Sys_LoadLibrary( SP_UI_DLL_NAME );
 	}
 
 	if ( !uiLibrary ) {
-		Com_Error( ERR_FATAL, "CL_SP_InitUI: failed to load efuix86.dll\n"
+		Com_Error( ERR_FATAL, "CL_SP_InitUI: failed to load " SP_UI_DLL_NAME "\n"
 				   "Searched: %s", dllPath );
 	}
 
@@ -1100,7 +1107,7 @@ void CL_SP_InitUI( void ) {
 	if ( !GetUIAPI ) {
 		Sys_UnloadLibrary( uiLibrary );
 		uiLibrary = NULL;
-		Com_Error( ERR_FATAL, "CL_SP_InitUI: efuix86.dll missing GetUIAPI export" );
+		Com_Error( ERR_FATAL, "CL_SP_InitUI: " SP_UI_DLL_NAME " missing GetUIAPI export" );
 	}
 
 	// Exchange function pointer tables
