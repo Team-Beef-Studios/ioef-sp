@@ -514,27 +514,51 @@ void R_SetupProjection(viewParms_t *dest, float zProj, qboolean computeFrustum)
 {
 	float	xmin, xmax, ymin, ymax;
 	float	width, height, stereoSep = r_stereoSeparation->value;
+	qboolean vrProjection = qfalse;
 
-	/*
-	 * offset the view origin of the viewer for stereo rendering 
-	 * by setting the projection matrix appropriately.
-	 */
-
-	if(stereoSep != 0)
+#ifdef BUILD_VR
+	// When an OpenXR session is driving the view, use the HMD's per-eye
+	// asymmetric FOV tangents (for the eye currently being rendered) instead
+	// of the symmetric refdef FOV.  The rest of the matrix / frustum / Z math
+	// below is shared with the flat path.
 	{
-		if(dest->stereoFrame == STEREO_LEFT)
-			stereoSep = zProj / stereoSep;
-		else if(dest->stereoFrame == STEREO_RIGHT)
-			stereoSep = zProj / -stereoSep;
-		else
+		float tanLeft, tanRight, tanUp, tanDown;
+		if ( ri.VR_GetFovTangents &&
+		     ri.VR_GetFovTangents( &tanLeft, &tanRight, &tanUp, &tanDown ) )
+		{
+			xmin = zProj * tanLeft;
+			xmax = zProj * tanRight;
+			ymin = zProj * tanDown;
+			ymax = zProj * tanUp;
 			stereoSep = 0;
+			vrProjection = qtrue;
+		}
 	}
+#endif
 
-	ymax = zProj * tan(dest->fovY * M_PI / 360.0f);
-	ymin = -ymax;
+	if ( !vrProjection )
+	{
+		/*
+		 * offset the view origin of the viewer for stereo rendering
+		 * by setting the projection matrix appropriately.
+		 */
 
-	xmax = zProj * tan(dest->fovX * M_PI / 360.0f);
-	xmin = -xmax;
+		if(stereoSep != 0)
+		{
+			if(dest->stereoFrame == STEREO_LEFT)
+				stereoSep = zProj / stereoSep;
+			else if(dest->stereoFrame == STEREO_RIGHT)
+				stereoSep = zProj / -stereoSep;
+			else
+				stereoSep = 0;
+		}
+
+		ymax = zProj * tan(dest->fovY * M_PI / 360.0f);
+		ymin = -ymax;
+
+		xmax = zProj * tan(dest->fovX * M_PI / 360.0f);
+		xmin = -xmax;
+	}
 
 	width = xmax - xmin;
 	height = ymax - ymin;

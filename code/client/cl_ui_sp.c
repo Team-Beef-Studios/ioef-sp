@@ -502,11 +502,11 @@ static void CL_SP_UI_DrawStretchRaw( int x, int y, int w, int h,
 
 static void CL_SP_FreeCaptureBuffers( void ) {
 	if ( cl_sp_captureBuffer ) {
-		Z_Free( cl_sp_captureBuffer );
+		free( cl_sp_captureBuffer );
 		cl_sp_captureBuffer = NULL;
 	}
 	if ( cl_sp_encodeBuffer ) {
-		Z_Free( cl_sp_encodeBuffer );
+		free( cl_sp_encodeBuffer );
 		cl_sp_encodeBuffer = NULL;
 	}
 	cl_sp_captureWidth = 0;
@@ -535,8 +535,11 @@ static qboolean CL_SP_EnsureCaptureBuffers( void ) {
 	paddedRowBytes = PAD( cl_sp_captureWidth * 3, 4 );
 	bufferSize = paddedRowBytes * cl_sp_captureHeight + 4;
 
-	cl_sp_captureBuffer = Z_Malloc( bufferSize );
-	cl_sp_encodeBuffer = Z_Malloc( bufferSize );
+	// Heap (not the small main zone) -- these are full-framebuffer RGB buffers
+	// sized vidWidth*vidHeight*3, which at VR per-eye resolutions (e.g. 2528x2704
+	// = ~20MB each) would overflow the zone and abort in Z_Malloc.
+	cl_sp_captureBuffer = (byte *)malloc( bufferSize );
+	cl_sp_encodeBuffer = (byte *)malloc( bufferSize );
 	if ( !cl_sp_captureBuffer || !cl_sp_encodeBuffer ) {
 		CL_SP_FreeCaptureBuffers();
 		return qfalse;

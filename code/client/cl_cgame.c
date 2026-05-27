@@ -26,6 +26,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "../botlib/botlib.h"
 
+#ifdef BUILD_VR
+#include "../vr/VrBase.h"
+#endif
+
 #ifdef USE_MUMBLE
 #include "libmumblelink.h"
 #endif
@@ -830,7 +834,18 @@ void CL_InitCGame( void ) {
 				// This mirrors the MP path below (and stock Q3's comment:
 				// "use the lastExecutedServerCommand ... otherwise server
 				// commands sent just before a gamestate are dropped").
+#ifdef BUILD_VR
+				// Pass the engine's VR state pointer as arg1 so the SP cgame
+				// (when built VR-aware) can read the HMD/controller pose to
+				// drive the view (NULL when VR isn't active -> cgame runs flat).
+				// arg2 carries a sentinel so a VR-aware cgame only trusts arg1
+				// when paired with a VR engine; a stock cgame ignores both.
+				VM_Call( cgvm, CG_INIT, clc.lastExecutedServerCommand,
+						 (intptr_t)( VR_IsActive() ? &vr : NULL ),
+						 (intptr_t)VR_CGINIT_SENTINEL );
+#else
 				VM_Call( cgvm, CG_INIT, clc.lastExecutedServerCommand );
+#endif
 				Com_Printf( "SP cgame initialized from efgamex86.dll\n" );
 			} else {
 				Com_Error( ERR_DROP, "SP cgame: efgamex86.dll missing dllEntry/vmMain" );

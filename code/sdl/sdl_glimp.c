@@ -831,6 +831,16 @@ Responsible for doing a swapbuffers
 */
 void GLimp_EndFrame( void )
 {
+#ifdef BUILD_VR
+	// While an OpenXR session is active the compositor presents the eye
+	// swapchains; the desktop window must NOT be swapped here (the VR layer
+	// drives any desktop mirror itself via EFXR_SwapWindow).
+	if ( ri.VR_IsActive && ri.VR_IsActive() )
+	{
+		return;
+	}
+#endif
+
 	// don't flip if drawing to front buffer
 	if ( Q_stricmp( r_drawBuffer->string, "GL_FRONT" ) != 0 )
 	{

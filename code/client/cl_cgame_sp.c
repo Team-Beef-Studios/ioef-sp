@@ -74,6 +74,10 @@ module's live data.
 #include "snd_local.h"
 #include "../qcommon/sp_types.h"
 
+#ifdef BUILD_VR
+#include "../vr/VrBase.h"
+#endif
+
 /*
  * These functions are defined in sv_game_sp.c (the server-side SP bridge).
  * They are safe to call from the client because SP is always a local game --
@@ -486,6 +490,17 @@ intptr_t CL_SPCgameSystemCalls( intptr_t *args ) {
 		re.AddLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5) );
 		return 0;
 	case SPCG_R_RENDERSCENE: {
+#ifdef BUILD_VR
+		// Stereo: shift the view origin laterally for the eye currently being
+		// rendered (vr.eye) so each eye sees from its own pupil -> IPD parallax.
+		// Skipped for the flat virtual-screen layer.  viewaxis[1] is the view
+		// LEFT axis, so this is correct under head roll too.
+		if ( VR_IsActive() && !VR_UseScreenLayer() ) {
+			refdef_t *fd = (refdef_t *)VMA(1);
+			float sep = VR_GetEyeStereoSeparation( vr.eye );
+			VectorMA( fd->vieworg, sep, fd->viewaxis[1], fd->vieworg );
+		}
+#endif
 		re.RenderScene( VMA(1) );
 		return 0;
 	}

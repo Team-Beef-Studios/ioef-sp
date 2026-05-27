@@ -150,7 +150,7 @@ ovrRenderer
 
 typedef struct
 {
-    ovrFramebuffer	FrameBuffer;
+    ovrFramebuffer	FrameBuffer[ovrMaxNumEyes];
     ovrFramebuffer	NullFrameBuffer; // Used to draw black projection view when showing quad layer
 } ovrRenderer;
 
@@ -248,9 +248,9 @@ void * AppThreadFunction(void * parm );
 
 //Functions that need to be implemented by the game specific code
 void VR_FrameSetup();
-bool VR_UseScreenLayer();
+qboolean VR_UseScreenLayer();
 float VR_GetScreenLayerDistance();
-qboolean VR_GetVRProjection(float zNear, float zFar, float gameFovX, float gameFovY, float* projection);
+qboolean VR_GetFovTangents(float *tanLeft, float *tanRight, float *tanUp, float *tanDown);
 void VR_HandleControllerInput();
 void VR_SetHMDOrientation(float pitch, float yaw, float roll );
 void VR_SetHMDPosition(float x, float y, float z );
@@ -283,8 +283,8 @@ void TBXR_ProcessHaptics();
 void TBXR_FrameSetup();
 void TBXR_updateProjections();
 void TBXR_UpdateControllers( );
-void TBXR_prepareEyeBuffer();
-void TBXR_finishEyeBuffer();
+void TBXR_prepareEyeBuffer(int eye);
+void TBXR_finishEyeBuffer(int eye);
 void TBXR_submitFrame();
 
 

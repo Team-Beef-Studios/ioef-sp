@@ -27,6 +27,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../sys/sys_local.h"
 #include "../sys/sys_loadlib.h"
 
+#ifdef BUILD_VR
+#include "../vr/VrBase.h"
+#endif
+
 #ifdef USE_MUMBLE
 #include "libmumblelink.h"
 #endif
@@ -3226,8 +3230,20 @@ CL_InitRenderer
 ============
 */
 void CL_InitRenderer( void ) {
+#ifdef BUILD_VR
+	// BEFORE the GL window is created: create the OpenXR instance and force the
+	// engine's render resolution to the headset's per-eye size (r_customwidth/
+	// height + r_mode -1), so the renderer's viewport matches the eye textures.
+	VR_PreRendererInit();
+#endif
+
 	// this sets up the renderer and calls R_Init
 	re.BeginRegistration( &cls.glconfig );
+
+#ifdef BUILD_VR
+	// The GL context now exists and is current -- create the session/swapchains.
+	VR_InitOnce();
+#endif
 
 	// load character sets
 #ifdef ELITEFORCE
@@ -3395,6 +3411,12 @@ void CL_InitRef( void ) {
 	ri.Sys_GLimpSafeInit = Sys_GLimpSafeInit;
 	ri.Sys_GLimpInit = Sys_GLimpInit;
 	ri.Sys_LowPhysicalMemory = Sys_LowPhysicalMemory;
+
+#ifdef BUILD_VR
+	ri.VR_IsActive = VR_IsActive;
+	ri.VR_UseScreenLayer = VR_UseScreenLayer;
+	ri.VR_GetFovTangents = VR_GetFovTangents;
+#endif
 
 	ret = GetRefAPI( REF_API_VERSION, &ri );
 

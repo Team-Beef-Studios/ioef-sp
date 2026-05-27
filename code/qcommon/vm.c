@@ -914,11 +914,16 @@ intptr_t QDECL VM_Call( vm_t *vm, int callnum, ... )
 	// if we have a dll loaded, call it directly
 	if ( vm->entryPoint ) {
 		//rcg010207 -  see dissertation at top of VM_DllSyscall() in this file.
-		int args[MAX_VMMAIN_ARGS-1];
+		// NOTE: args are intptr_t (pointer-width), not int -- a 64-bit caller may
+		// pass a real pointer through VM_Call (e.g. CG_INIT hands the cgame the
+		// engine's vr_client_info_t*).  Reading them as int truncated the high 32
+		// bits of such pointers, crashing the DLL on first dereference.  This
+		// matches upstream ioquake3 / the RealRTCWXR VR port.
+		intptr_t args[MAX_VMMAIN_ARGS-1];
 		va_list ap;
 		va_start(ap, callnum);
 		for (i = 0; i < ARRAY_LEN(args); i++) {
-			args[i] = va_arg(ap, int);
+			args[i] = va_arg(ap, intptr_t);
 		}
 		va_end(ap);
 

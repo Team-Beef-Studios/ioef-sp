@@ -24,6 +24,10 @@ headers -- so the DLLs never need the OpenXR SDK.
 
 #define VR_CLIENT_INFO_VERSION  1
 
+/* Passed by a VR engine in CG_INIT arg2 so a VR-aware cgame only trusts the
+   vr pointer (arg1) when paired with a VR engine.  "VRM1". */
+#define VR_CGINIT_SENTINEL      0x56524d31
+
 #define NUM_WEAPON_SAMPLES      10
 
 #define ANGLES_DEFAULT          0
@@ -45,6 +49,7 @@ typedef struct {
     qboolean    cin_camera;             /* a scripted/ICARUS cinematic camera has taken over */
     qboolean    misc_camera;            /* looking through a misc camera-view entity */
     qboolean    using_screen_layer;     /* this frame is being shown on the flat virtual screen */
+    int         eye;                    /* the eye currently being rendered (0 = left, 1 = right) */
     qboolean    immersive_cinematics;   /* user opted to view cutscenes immersively, not on the screen */
 
     qboolean    third_person;

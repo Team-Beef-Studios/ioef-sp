@@ -142,7 +142,7 @@ static bool ovrFramebuffer_Create(
     swapChainCreateInfo.width = width;
     swapChainCreateInfo.height = height;
     swapChainCreateInfo.faceCount = 1;
-    swapChainCreateInfo.arraySize = 3; // Use 3 layers, skip layer 0 for VDXR compatibility
+    swapChainCreateInfo.arraySize = 1;
 
     frameBuffer->ColorSwapChain.Width = swapChainCreateInfo.width;
     frameBuffer->ColorSwapChain.Height = swapChainCreateInfo.height;
@@ -173,68 +173,35 @@ static bool ovrFramebuffer_Create(
     frameBuffer->FrameBuffers =
             (GLuint*)malloc(frameBuffer->TextureSwapChainLength * sizeof(GLuint));
 
-		for (uint32_t i = 0; i < frameBuffer->TextureSwapChainLength; i++) {
-		frameBuffer->FrameBuffers[i] = 0;
-		// Create the color buffer texture.
-		const GLuint colorTexture = frameBuffer->ColorSwapChainImage[i].image;
-		GLenum colorTextureTarget = GL_TEXTURE_2D_ARRAY;
-		GL(glBindTexture(colorTextureTarget, colorTexture));
-		GL(glTexParameteri(colorTextureTarget, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER));
-		GL(glTexParameteri(colorTextureTarget, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER));
-		GLfloat borderColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-		GL(glTexParameterfv(colorTextureTarget, GL_TEXTURE_BORDER_COLOR, borderColor));
-		GL(glTexParameteri(colorTextureTarget, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-		GL(glTexParameteri(colorTextureTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
-		GL(glBindTexture(colorTextureTarget, 0));
-
-		// Create the depth buffer texture.
-		GL(glGenTextures(1, &frameBuffer->DepthBuffers[i]));
-		GL(glBindTexture(GL_TEXTURE_2D_ARRAY, frameBuffer->DepthBuffers[i]));
-		GL(glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, GL_DEPTH24_STENCIL8, width, height, 3)); // 3 layers to skip layer 0
-		GL(glBindTexture(GL_TEXTURE_2D_ARRAY, 0));
+    for (uint32_t i = 0; i < frameBuffer->TextureSwapChainLength; i++) {
+        // Create the color buffer texture.
+        const GLuint colorTexture = frameBuffer->ColorSwapChainImage[i].image;
 
 		// Create the frame buffer.
+		frameBuffer->FrameBuffers[i] = 0;
 		GL(glGenFramebuffers(1, &frameBuffer->FrameBuffers[i]));
-		GL(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frameBuffer->FrameBuffers[i]));
 
-		{
-			// Use baseViewIndex=1 to render to layers 1 and 2, skipping layer 0 for VDXR compatibility
-			GL(glFramebufferTextureMultiviewOVR(
-				GL_DRAW_FRAMEBUFFER,
-				GL_DEPTH_ATTACHMENT,
-				frameBuffer->DepthBuffers[i],
-				0 /* level */,
-				1 /* baseViewIndex */,
-				2 /* numViews */));
-			GL(glFramebufferTextureMultiviewOVR(
-				GL_DRAW_FRAMEBUFFER,
-				GL_STENCIL_ATTACHMENT,
-				frameBuffer->DepthBuffers[i],
-				0 /* level */,
-				1 /* baseViewIndex */,
-				2 /* numViews */));
-			GL(glFramebufferTextureMultiviewOVR(
-				GL_DRAW_FRAMEBUFFER,
-				GL_COLOR_ATTACHMENT0,
-				colorTexture,
-				0 /* level */,
-				1 /* baseViewIndex */,
-				2 /* numViews */));
-		}
+        {
+			GLint texWidth;
+			GLint texHeight;
+			glBindTexture(GL_TEXTURE_2D, colorTexture);
+			glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texWidth);
+			glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texHeight);
+			TBXR_ClearFrameBuffer(texWidth, texHeight);
 
-		GL(GLenum renderFramebufferStatus = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER));
-		GL(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0));
-		if (renderFramebufferStatus != GL_FRAMEBUFFER_COMPLETE) {
-			ALOGE(
-				"Incomplete frame buffer object");
-			return false;
-		}
-	}
+			glGenTextures(1, &frameBuffer->DepthBuffers[i]);
+			glBindTexture(GL_TEXTURE_2D, frameBuffer->DepthBuffers[i]);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, texWidth, texHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+			glBindTexture(GL_TEXTURE_2D, 0);
+        }
+    }
 
     return true;
 }
-
-static GLuint fb = -1;
 
 void ovrFramebuffer_Destroy(ovrFramebuffer* frameBuffer) {
     GL(glDeleteFramebuffers(frameBuffer->TextureSwapChainLength, frameBuffer->FrameBuffers));
@@ -244,12 +211,6 @@ void ovrFramebuffer_Destroy(ovrFramebuffer* frameBuffer) {
 
     free(frameBuffer->DepthBuffers);
     free(frameBuffer->FrameBuffers);
-
-	if (fb != -1)
-	{
-		glDeleteFramebuffers(1, &fb);
-	}
-	fb = -1;
 }
 
 void ovrFramebuffer_SetCurrent(ovrFramebuffer* frameBuffer) {
@@ -258,9 +219,8 @@ void ovrFramebuffer_SetCurrent(ovrFramebuffer* frameBuffer) {
 	const GLuint colorTexture = frameBuffer->ColorSwapChainImage[frameBuffer->TextureSwapChainIndex].image;
 	const uint32_t depthTexture = frameBuffer->DepthBuffers[frameBuffer->TextureSwapChainIndex];
 
-	// Re-apply multiview attachments with baseViewIndex=1 to skip layer 0 for VDXR compatibility
-	glFramebufferTextureMultiviewOVR(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, colorTexture, 0, 1, 2);
-	glFramebufferTextureMultiviewOVR(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthTexture, 0, 1, 2);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
 }
 
 void ovrFramebuffer_SetNone() {
@@ -269,20 +229,13 @@ void ovrFramebuffer_SetNone() {
 
 void ovrFramebuffer_Resolve(ovrFramebuffer* frameBuffer) {
 
-	const GLuint colorTexture = frameBuffer->ColorSwapChainImage[frameBuffer->TextureSwapChainIndex].image;
-
 	int width, height;
 	EFXR_GetScreenResolution(&width, &height);
 
-	//Create a framebuffer solely for the purpose of binding the color texture to as a single texture layer in order to blit from
-	//as we can't blit direct from the eye FBO as that doesn't work (no idea why.. no sensible explanation anywhere I can find)
-	if (fb == -1)
-	{
-		glGenFramebuffers(1, &fb);
-	}
-
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, fb);
-	glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, colorTexture, 0, 2); // Use layer 2 (skip layer 0) for VDXR compatibility
+	// Per-eye blit of the resolved eye FBO to the mirror window.  JKXR blits
+	// directly from FrameBuffers[index] (GL_TEXTURE_2D, single layer) rather
+	// than via the layered-texture helper FBO the multiview path required.
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, frameBuffer->FrameBuffers[frameBuffer->TextureSwapChainIndex]);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glBlitFramebuffer(0, 0, gAppState.Width, gAppState.Height,
 		0, 0, width, height,
@@ -332,12 +285,14 @@ void ovrRenderer_Create(
 		int suggestedEyeTextureWidth,
 		int suggestedEyeTextureHeight) {
 	// Create the frame buffers.
-	ovrFramebuffer_Create(
-			session,
-			&renderer->FrameBuffer,
-			GL_SRGB8_ALPHA8,
-			suggestedEyeTextureWidth,
-			suggestedEyeTextureHeight);
+	for (int eye = 0; eye < ovrMaxNumEyes; eye++) {
+		ovrFramebuffer_Create(
+				session,
+				&renderer->FrameBuffer[eye],
+				GL_SRGB8_ALPHA8,
+				suggestedEyeTextureWidth,
+				suggestedEyeTextureHeight);
+	}
 
 	ovrFramebuffer_Create(
 		session,
@@ -348,7 +303,9 @@ void ovrRenderer_Create(
 }
 
 void ovrRenderer_Destroy(ovrRenderer* renderer) {
-	ovrFramebuffer_Destroy(&renderer->FrameBuffer);
+	for (int eye = 0; eye < ovrMaxNumEyes; eye++) {
+		ovrFramebuffer_Destroy(&renderer->FrameBuffer[eye]);
+	}
 }
 
 
@@ -881,11 +838,14 @@ void TBXR_InitRenderer(  ) {
         gAppState.Views[eye].type = XR_TYPE_VIEW;
 	}
 
+	// Create the per-eye swapchains at gAppState.Width/Height -- this is the
+	// (possibly render-scaled) engine render resolution, which MUST equal the
+	// eye texture size so the engine's viewport exactly fills each eye texture.
 	ovrRenderer_Create(
 			gAppState.Session,
 			&gAppState.Renderer,
-			gAppState.ViewConfigurationView[0].recommendedImageRectWidth,
-			gAppState.ViewConfigurationView[0].recommendedImageRectHeight);
+			(int)gAppState.Width,
+			(int)gAppState.Height);
 }
 
 void VR_DestroyRenderer(  )
@@ -903,7 +863,10 @@ void TBXR_InitialiseOpenXR()
 	appInfo.applicationVersion = 0;
 	strcpy(appInfo.engineName, "ioEF XR");
 	appInfo.engineVersion = 0;
-	appInfo.apiVersion = XR_CURRENT_API_VERSION;
+	// Request OpenXR 1.0 for maximum runtime compatibility.  The vendored
+	// headers/loader are 1.1, but runtimes like SteamVR only implement 1.0 and
+	// reject a 1.1 xrCreateInstance with XR_ERROR_INITIALIZATION_FAILED (-4).
+	appInfo.apiVersion = XR_MAKE_VERSION(1, 0, 0);
 
 	XrInstanceCreateInfo instanceCreateInfo;
 	memset(&instanceCreateInfo, 0, sizeof(instanceCreateInfo));
@@ -917,10 +880,14 @@ void TBXR_InitialiseOpenXR()
 	instanceCreateInfo.enabledExtensionNames = requiredExtensionNames;
 
 	XrResult initResult;
+	gAppState.Instance = XR_NULL_HANDLE;
 	OXR(initResult = xrCreateInstance(&instanceCreateInfo, &gAppState.Instance));
 	if (initResult != XR_SUCCESS) {
-		ALOGE("Failed to create XR instance: %d.", initResult);
-		exit(1);
+		// Non-fatal: leave the instance null so VR_Init() can fall back to a
+		// flat-screen session instead of taking the whole game down.
+		ALOGE("Failed to create XR instance: %d -- VR disabled, running flat.\n", initResult);
+		gAppState.Instance = XR_NULL_HANDLE;
+		return;
 	}
 
 	XrInstanceProperties instanceInfo;
@@ -942,8 +909,12 @@ void TBXR_InitialiseOpenXR()
 
 	OXR(initResult = xrGetSystem(gAppState.Instance, &systemGetInfo, &gAppState.SystemId));
 	if (initResult != XR_SUCCESS) {
-		Sys_Dialog(DT_ERROR, "Unable to create OpenXR System - Please ensure you headset is connected and powered on.", "No VR Headset Detected");
-		exit(1);
+		// No HMD available (runtime up but no headset, etc).  Non-fatal: tear
+		// down the instance and null it so VR_Init() falls back to flat-screen.
+		ALOGE("No OpenXR HMD available: %d -- VR disabled, running flat.\n", initResult);
+		xrDestroyInstance(gAppState.Instance);
+		gAppState.Instance = XR_NULL_HANDLE;
+		return;
 	}
 
 	// Get the graphics requirements.
@@ -1109,9 +1080,10 @@ void TBXR_ClearFrameBuffer(int width, int height)
 	glDisable( GL_FRAMEBUFFER_SRGB );
 }
 
-void TBXR_prepareEyeBuffer()
+void TBXR_prepareEyeBuffer(int eye)
 {
-	ovrFramebuffer* frameBuffer = &(gAppState.Renderer.FrameBuffer);
+	vr.eye = eye;
+	ovrFramebuffer* frameBuffer = &(gAppState.Renderer.FrameBuffer[eye]);
 	ovrFramebuffer_Acquire(frameBuffer);
 	ovrFramebuffer_SetCurrent(frameBuffer);
 	TBXR_ClearFrameBuffer(frameBuffer->ColorSwapChain.Width, frameBuffer->ColorSwapChain.Height);
@@ -1119,17 +1091,17 @@ void TBXR_prepareEyeBuffer()
 	ovrFramebuffer_Acquire(&gAppState.Renderer.NullFrameBuffer);
 
 	//Seems odd, but used to move the HUD elements to be central on the player's view
-	for (int eye = 0; eye < 2; ++eye)
-	{
-		vr.off_center_fov_x[eye] = -(gAppState.Views[eye].fov.angleLeft + gAppState.Views[eye].fov.angleRight) / 2.0f;
-		vr.off_center_fov_y[eye] = -(gAppState.Views[eye].fov.angleUp + gAppState.Views[eye].fov.angleDown) / 2.0f;
-	}
+	//HMDs with a symmetric fov (like the PICO) will have 0 in this value, but the Meta Quest
+	//will have an asymmetric fov and the HUD would be very misaligned as a result.
+	//NOTE: ioEF's off_center_fov_x/y are per-eye arrays (JKXR uses scalars).
+	vr.off_center_fov_x[eye] = -(gAppState.Views[eye].fov.angleLeft + gAppState.Views[eye].fov.angleRight) / 2.0f;
+	vr.off_center_fov_y[eye] = -(gAppState.Views[eye].fov.angleUp + gAppState.Views[eye].fov.angleDown) / 2.0f;
 }
 
-void TBXR_finishEyeBuffer()
+void TBXR_finishEyeBuffer(int eye)
 {
 	ovrRenderer *renderer = &gAppState.Renderer;
-	ovrFramebuffer *frameBuffer = &(renderer->FrameBuffer);
+	ovrFramebuffer *frameBuffer = &(renderer->FrameBuffer[eye]);
 
 	// Clear the alpha channel, other way OpenXR would not transfer the framebuffer fully
 	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
@@ -1140,6 +1112,13 @@ void TBXR_finishEyeBuffer()
 	ovrFramebuffer_Release(&gAppState.Renderer.NullFrameBuffer);
 
 	ovrFramebuffer_SetNone();
+
+	if (eye == 0)
+	{
+		ovrFramebuffer_Resolve(frameBuffer);
+
+		EFXR_SwapWindow();
+	}
 
 	ovrFramebuffer_Release(frameBuffer);
 }
@@ -1208,11 +1187,9 @@ void TBXR_submitFrame()
 			projection_layer_elements[eye].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
 			projection_layer_elements[eye].pose = gAppState.Views[eye].pose;
 			projection_layer_elements[eye].fov = fov;
-			// Use imageArrayIndex 1 and 2 (skip layer 0) for VDXR compatibility
-			projection_layer_elements[eye].subImage.imageArrayIndex = eye + 1;
-			projection_layer_elements[eye].subImage.swapchain = gAppState.Renderer.FrameBuffer.ColorSwapChain.Handle;
-			projection_layer_elements[eye].subImage.imageRect.extent.width = gAppState.Renderer.FrameBuffer.ColorSwapChain.Width;
-			projection_layer_elements[eye].subImage.imageRect.extent.height = gAppState.Renderer.FrameBuffer.ColorSwapChain.Height;
+			projection_layer_elements[eye].subImage.swapchain = gAppState.Renderer.FrameBuffer[eye].ColorSwapChain.Handle;
+			projection_layer_elements[eye].subImage.imageRect.extent.width = gAppState.Renderer.FrameBuffer[eye].ColorSwapChain.Width;
+			projection_layer_elements[eye].subImage.imageRect.extent.height = gAppState.Renderer.FrameBuffer[eye].ColorSwapChain.Height;
 		}
 
 		// Compose the layers for this frame.
@@ -1234,8 +1211,6 @@ void TBXR_submitFrame()
 			projection_layer_elements[eye].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
 			projection_layer_elements[eye].pose = gAppState.Views[eye].pose;
 			projection_layer_elements[eye].fov = gAppState.Views[eye].fov;
-			// Use imageArrayIndex 1 and 2 (skip layer 0) for VDXR compatibility
-			projection_layer_elements[eye].subImage.imageArrayIndex = eye + 1;
 			projection_layer_elements[eye].subImage.swapchain = gAppState.Renderer.NullFrameBuffer.ColorSwapChain.Handle;
 			projection_layer_elements[eye].subImage.imageRect.extent.width = gAppState.Renderer.NullFrameBuffer.ColorSwapChain.Width;
 			projection_layer_elements[eye].subImage.imageRect.extent.height = gAppState.Renderer.NullFrameBuffer.ColorSwapChain.Height;
@@ -1246,15 +1221,16 @@ void TBXR_submitFrame()
 
 		memset(&quad_layer, 0, sizeof(XrCompositionLayerQuad));
 
-		// Build the quad layers
+		// Build the quad layers (virtual screen) from eye 0's framebuffer
+		int32_t width = gAppState.Renderer.FrameBuffer[0].ColorSwapChain.Width;
+		int32_t height = gAppState.Renderer.FrameBuffer[0].ColorSwapChain.Height;
 		quad_layer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
 		quad_layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
 		quad_layer.space = gAppState.StageSpace;
 		quad_layer.eyeVisibility =XR_EYE_VISIBILITY_BOTH;
-		quad_layer.subImage.imageArrayIndex = 2; // Use layer 2 (skip layer 0) for VDXR compatibility
-		quad_layer.subImage.swapchain = gAppState.Renderer.FrameBuffer.ColorSwapChain.Handle;
-		quad_layer.subImage.imageRect.extent.width = gAppState.Renderer.FrameBuffer.ColorSwapChain.Width;
-		quad_layer.subImage.imageRect.extent.height = gAppState.Renderer.FrameBuffer.ColorSwapChain.Height;
+		quad_layer.subImage.swapchain = gAppState.Renderer.FrameBuffer[0].ColorSwapChain.Handle;
+		quad_layer.subImage.imageRect.extent.width = width;
+		quad_layer.subImage.imageRect.extent.height = height;
 		const XrVector3f axis = { 0.0f, 1.0f, 0.0f };
 		XrVector3f pos = {
 				gAppState.xfStageFromHead.position.x - sin(DEG2RAD(vr.hmdorientation_snap[YAW])) * VR_GetScreenLayerDistance(),
@@ -1268,11 +1244,6 @@ void TBXR_submitFrame()
 
 		layers[layerCount++] = (const XrCompositionLayerBaseHeader*)&quad_layer;
 	}
-
-	ovrFramebuffer* frameBuffer = &(gAppState.Renderer.FrameBuffer);
-	ovrFramebuffer_Resolve(frameBuffer);
-	EFXR_SwapWindow();
-
 
 	endFrameInfo.layerCount = layerCount;
 	OXR(xrEndFrame(gAppState.Session, &endFrameInfo));

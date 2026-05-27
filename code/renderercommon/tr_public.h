@@ -183,6 +183,17 @@ typedef struct {
 	void	(*Sys_GLimpSafeInit)( void );
 	void	(*Sys_GLimpInit)( void );
 	qboolean (*Sys_LowPhysicalMemory)( void );
+
+#ifdef BUILD_VR
+	// OpenXR VR hooks (filled in by the client's VR layer; NULL/unused in flat
+	// builds).  VR_GetFovTangents returns the asymmetric per-eye view frustum
+	// tangents for the eye currently being rendered, or qfalse to fall back to
+	// the normal flat projection.  VR_IsActive lets the GL backend suppress the
+	// desktop window swap while the XR runtime is presenting.
+	qboolean (*VR_IsActive)( void );
+	qboolean (*VR_UseScreenLayer)( void );
+	qboolean (*VR_GetFovTangents)( float *tanLeft, float *tanRight, float *tanUp, float *tanDown );
+#endif
 } refimport_t;
 
 

@@ -23,6 +23,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "client.h"
 
+#ifdef BUILD_VR
+#include "../vr/VrBase.h"
+#endif
+
 qboolean	scr_initialized;		// ready to draw
 
 cvar_t		*cl_timegraph;
@@ -587,6 +591,49 @@ void SCR_UpdateScreen( void ) {
 	// that case.
 	if( uivm || com_dedicated->integer )
 	{
+#ifdef BUILD_VR
+		if ( VR_IsActive() )
+		{
+			// OpenXR-driven frame.  TBXR_FrameSetup waits/begins the XR frame and
+			// updates the HMD pose; we then render each eye into its own XR
+			// swapchain image (two-pass, GL1) -- or the flat 2D image onto the
+			// virtual screen (quad layer) when VR_UseScreenLayer() is true --
+			// and submit to the compositor.  The desktop window swap is
+			// suppressed in GLimp_EndFrame while VR is active.
+			TBXR_FrameSetup();
+
+			if ( VR_UseScreenLayer() )
+			{
+				TBXR_prepareEyeBuffer( 0 );
+				SCR_DrawScreenField( STEREO_CENTER );
+				re.EndFrame( NULL, NULL );
+				TBXR_finishEyeBuffer( 0 );
+			}
+			else
+			{
+				int eye;
+				for ( eye = 0; eye < 2; eye++ )
+				{
+					// Pass STEREO_LEFT/RIGHT so the cgame's CG_DrawActiveFrame can
+					// gate per-frame simulation correctly (it only advances time /
+					// effects when stereoView != STEREO_RIGHT) -- otherwise the
+					// right eye gets frametime 0 and frame-gated effects (beams,
+					// FX) render in the left eye only.  The renderer accepts these
+					// under VR (RE_BeginFrame); the actual eye target is the FBO
+					// bound by TBXR_prepareEyeBuffer (+ per-eye projection via vr.eye).
+					TBXR_prepareEyeBuffer( eye );
+					SCR_DrawScreenField( eye == 0 ? STEREO_LEFT : STEREO_RIGHT );
+					re.EndFrame( NULL, NULL );
+					TBXR_finishEyeBuffer( eye );
+				}
+			}
+
+			TBXR_submitFrame();
+			recursive = 0;
+			return;
+		}
+#endif
+
 		// XXX
 		int in_anaglyphMode = Cvar_VariableIntegerValue("r_anaglyphMode");
 		// if running in stereo, we need to draw the frame twice
@@ -603,7 +650,7 @@ void SCR_UpdateScreen( void ) {
 			re.EndFrame( NULL, NULL );
 		}
 	}
-	
+
 	recursive = 0;
 }
 

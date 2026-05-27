@@ -424,7 +424,15 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 		}
 		else
 		{
+			// In VR, quad-buffer stereo is off but the engine still passes
+			// STEREO_LEFT/RIGHT to tag which eye is being rendered (each eye goes
+			// to its own OpenXR swapchain FBO, not GL_BACK_LEFT/RIGHT).  Treat it
+			// as a normal single-buffer frame; don't error.
+#ifdef BUILD_VR
+			if(stereoFrame != STEREO_CENTER && !(ri.VR_IsActive && ri.VR_IsActive()))
+#else
 			if(stereoFrame != STEREO_CENTER)
+#endif
 				ri.Error( ERR_FATAL, "RE_BeginFrame: Stereo is disabled, but stereoFrame was %i", stereoFrame );
 
 			if( !(cmd = R_GetCommandBuffer(sizeof(*cmd))) )
