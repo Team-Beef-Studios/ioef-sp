@@ -106,6 +106,7 @@ VR_SRC       := $(LOCAL_PATH)/vr/VrInputCommon.c \
                 $(LOCAL_PATH)/vr/android/EFXR_SurfaceView.c \
                 $(LOCAL_PATH)/vr/android/EFXR_AndroidGlue.c \
                 $(LOCAL_PATH)/vr/android/android_glimp.c \
+                $(LOCAL_PATH)/vr/android/android_crash.c \
                 $(LOCAL_PATH)/vr/android/snd_opensles.c
 
 ENGINE_SRC := $(QCOMMON_SRC) $(CLIENT_SRC) $(SERVER_SRC) $(BOTLIB_SRC) \

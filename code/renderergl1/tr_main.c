@@ -521,6 +521,13 @@ void R_SetupProjection(viewParms_t *dest, float zProj, qboolean computeFrustum)
 	// asymmetric FOV tangents (for the eye currently being rendered) instead
 	// of the symmetric refdef FOV.  The rest of the matrix / frustum / Z math
 	// below is shared with the flat path.
+	//
+	// EXCEPT for RDF_NOWORLDMODEL sub-scenes -- those are little 3D models drawn
+	// into a 2D HUD/UI box (the comm talking-head portrait, weapon-select icons,
+	// scoreboard heads), which set their OWN small FOV (e.g. 30) in the refdef.
+	// Forcing the wide headset FOV onto them shrinks the model to a tiny speck, so
+	// keep their refdef FOV (fall through to the symmetric path below).
+	if ( !(tr.refdef.rdflags & RDF_NOWORLDMODEL) )
 	{
 		float tanLeft, tanRight, tanUp, tanDown;
 		if ( ri.VR_GetFovTangents &&

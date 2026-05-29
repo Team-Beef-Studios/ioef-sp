@@ -15,9 +15,11 @@ Authors		:	Simon Brown
 *************************************************************************************/
 
 #include "VrCommon.h"
+#include "VrCvars.h"
 
 #include "../qcommon/qcommon.h"
 #include "../qcommon/q_shared.h"
+#include "../client/client.h"   // CL_MouseEvent/CL_KeyEvent/Key_GetCatcher/K_MOUSE1 (menu pointer)
 
 long long global_time;
 int ducked;
@@ -82,4 +84,311 @@ float nonLinearFilter(float in)
 bool between(float min, float val, float max)
 {
     return (min < val) && (val < max);
+}
+
+
+/* ============================================================================
+   SHARED VR CONTROLLER INPUT (moved here from the per-platform EFXR_SurfaceView.c
+   so a single copy drives BOTH the Android and Windows/PCVR builds).  Platform
+   files keep only platform-specific glue (EGL/WGL swap, screen res, VR_Init).
+   ============================================================================ */
+/*
+================================================================================
+
+Controller input mapping  (movement / turn / shoot / jump / use / crouch)
+
+Modeled on RealRTCWXR VrInputDefault.c HandleInput_Default, trimmed to the
+focused ioEF scope (no saber/akimbo/gesture/weapon-align/binoculars/vehicle).
+Handedness is driven entirely by vr_control_scheme (0 = right-handed, 10 =
+left-handed) and vr_switch_sticks, exactly like RealRTCWXR, so a future full
+left-handed mode is just the cvar.
+
+The actual button/move state is exposed to the engine (cl_input.c CL_FinishMove)
+via VR_GetControllerMove / VR_GetControllerButtons / VR_GetControllerUpMove /
+VR_GetTurnDelta -- the engine ORs the buttons into the usercmd and adds the
+turn delta to cl.viewangles[YAW] (same incremental model as the HMD yaw).
+
+================================================================================
+*/
+
+/* EF game usercmd button bits (from Elite-Force-VR/game/q_shared.h -- the game
+   DLL consumes these verbatim from usercmd_t.buttons).  The engine's own
+   q_shared.h does not define BUTTON_USE / BUTTON_ALT_ATTACK, so we use the
+   numeric values the game expects. */
+#define EF_BUTTON_ATTACK        1
+#define EF_BUTTON_USE_HOLDABLE  4    /* skips scripted cinematics (ClientCinematicThink) */
+#define EF_BUTTON_USE           32
+#define EF_BUTTON_ALT_ATTACK    128
+
+/* Per-frame controller output, read by the engine via the getters below. */
+static int   vr_controllerButtons = 0;      /* OR of EF_BUTTON_* this frame   */
+static int   vr_controllerUpMove  = 0;      /* +127 jump / -127 crouch / 0    */
+static float vr_turnDelta         = 0.0f;   /* yaw delta to apply this frame  */
+
+/* ------------------------------------------------------------------------
+   VR menu laser-pointer (ported from RealRTCWXR VrInputCommon.c).
+   When a 2D menu/console is up it is drawn on a quad facing
+   vr.hmdorientation_snap[YAW]; we map the pointing controller's yaw/pitch
+   (relative to that snapped facing) to a normalised cursor and feed it to the
+   UI as relative mouse deltas, with the trigger / face button as left-click.
+   ------------------------------------------------------------------------ */
+
+// Normalised (0..1) cursor -> engine virtual 640x480 UI space, fed as a RELATIVE
+// mouse delta (the UI accumulates deltas; we track the previous absolute pos).
+static void VR_MenuMouseAbs(float x, float y)
+{
+	static int ox = 0, oy = 0;
+	int absx = (int)(x * 640.0f);
+	int absy = (int)(y * 480.0f);
+	CL_MouseEvent(absx - ox, absy - oy, 0);
+	ox = absx;
+	oy = absy;
+}
+
+// Map the pointing controller's aim angles (relative to the menu's facing yaw)
+// to a cursor position.  -sin(dyaw) sweeps left/right; pitch/90 sweeps up/down.
+static void VR_MenuPoint(float menuYaw, const vec3_t controllerAngles)
+{
+	float cursorX = -sinf(DEG2RAD(controllerAngles[YAW] - menuYaw)) + 0.5f;
+	float cursorY = (controllerAngles[PITCH] / 90.0f) + 0.5f;
+	VR_MenuMouseAbs(cursorX, cursorY);
+}
+
+// Edge-detected controller button -> engine key event (e.g. trigger -> K_MOUSE1).
+static void VR_MenuButtonKey(const ovrInputStateTrackedRemote *cur,
+                             const ovrInputStateTrackedRemote *prev,
+                             uint32_t button, int key)
+{
+	if ((cur->Buttons & button) != (prev->Buttons & button))
+	{
+		CL_KeyEvent(key, (cur->Buttons & button) != 0, Sys_Milliseconds());
+	}
+}
+
+void VR_HandleControllerInput()
+{
+	TBXR_UpdateControllers();
+
+	// Reset per-frame outputs.
+	vr_controllerButtons = 0;
+	vr_controllerUpMove  = 0;
+	vr_turnDelta         = 0.0f;
+
+	// Ensure handedness flags are set (mirrors RealRTCWXR).  <10 = right-handed.
+	vr.right_handed = vr_control_scheme->integer < 10;
+
+	// Pick dominant (weapon) vs off hand from the control scheme, RealRTCWXR-style.
+	ovrInputStateTrackedRemote *pDom, *pOff, *pDomOld, *pOffOld;
+	ovrTrackedController       *pDomTrack;   // dominant-hand aim pose (menu pointer)
+	int domFace1, domFace2;   // dominant-hand face buttons (jump, use)
+	int offFace1;             // off-hand face button 1 (hold = mission objectives)
+	if (vr_control_scheme->integer == LEFT_HANDED_DEFAULT)
+	{
+		pDom = &leftTrackedRemoteState_new;
+		pDomOld = &leftTrackedRemoteState_old;
+		pOff = &rightTrackedRemoteState_new;
+		pOffOld = &rightTrackedRemoteState_old;
+		pDomTrack = &leftRemoteTracking_new;
+		domFace1 = xrButton_X;   // jump
+		domFace2 = xrButton_Y;   // use
+		offFace1 = xrButton_A;   // off-hand (right) primary -> mission info
+	}
+	else
+	{
+		pDom = &rightTrackedRemoteState_new;
+		pDomOld = &rightTrackedRemoteState_old;
+		pOff = &leftTrackedRemoteState_new;
+		pOffOld = &leftTrackedRemoteState_old;
+		pDomTrack = &rightRemoteTracking_new;
+		domFace1 = xrButton_A;   // jump
+		domFace2 = xrButton_B;   // use
+		offFace1 = xrButton_X;   // off-hand (left) primary -> mission info
+	}
+
+	// vr_switch_sticks swaps which stick moves vs turns (the move stick is
+	// normally the OFF hand, the turn stick the DOMINANT hand -- RealRTCWXR).
+	XrVector2f *pMoveStick;
+	XrVector2f *pTurnStick;
+	if (vr_switch_sticks->integer)
+	{
+		pMoveStick = &pDom->Joystick;
+		pTurnStick = &pOff->Joystick;
+	}
+	else
+	{
+		pMoveStick = &pOff->Joystick;
+		pTurnStick = &pDom->Joystick;
+	}
+
+	// When a 2D menu or the console is up, the screen-layer quad is shown; drive
+	// its cursor with the pointing controller (laser-pointer) instead of running
+	// gameplay input.  (Console/UI catcher -- NOT cinematics, which still want the
+	// gameplay branch so the A-button cutscene-skip works.)
+	qboolean menuActive = (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CONSOLE)) != 0;
+	if (menuActive)
+	{
+		// Aim the dominant controller at the menu quad (which faces
+		// hmdorientation_snap[YAW]) and map yaw/pitch to the UI cursor.
+		vec3_t zero = {0.0f, 0.0f, 0.0f};
+		vec3_t aimAngles;
+		QuatToYawPitchRoll(pDomTrack->Pose.orientation, zero, aimAngles);
+		VR_MenuPoint(vr.hmdorientation_snap[YAW], aimAngles);
+
+		// Click: dominant trigger or face button 1 -> left mouse button.
+		VR_MenuButtonKey(pDom, pDomOld, xrButton_Trigger, K_MOUSE1);
+		VR_MenuButtonKey(pDom, pDomOld, domFace1,         K_MOUSE1);
+		// Menu/back button (either hand) -> Escape (back out / close the menu).
+		VR_MenuButtonKey(&leftTrackedRemoteState_new,  &leftTrackedRemoteState_old,  xrButton_Enter, K_ESCAPE);
+		VR_MenuButtonKey(&rightTrackedRemoteState_new, &rightTrackedRemoteState_old, xrButton_Enter, K_ESCAPE);
+
+		// Save state for edge detection next frame, then we're done.
+		rightTrackedRemoteState_old = rightTrackedRemoteState_new;
+		leftTrackedRemoteState_old  = leftTrackedRemoteState_new;
+		return;
+	}
+
+	// ---- Movement: move-hand thumbstick -> forward/side (deadzone + filter) ----
+	{
+		float dist = length(pMoveStick->x, pMoveStick->y);
+		float nlf  = nonLinearFilter(dist);
+		float d    = (dist > 1.0f) ? dist : 1.0f;
+		float x    = nlf * (pMoveStick->x / d);
+		float y    = nlf * (pMoveStick->y / d);
+
+		vr.player_moving = (fabs(x) + fabs(y)) > 0.05f;
+
+		float speed = (vr.move_speed == 0 ? 0.75f : (vr.move_speed == 1 ? 1.0f : 0.5f));
+		remote_movementSideways = x * speed;
+		remote_movementForward  = y * speed;
+	}
+
+	// ---- Turn: turn-hand thumbstick X -> yaw (snap or smooth) ----
+	{
+		float turnX = pTurnStick->x;
+		bool usingSnapTurn = (vr_turn_mode->integer == 0);
+
+		static qboolean snapReady = qtrue;  // re-arm when stick returns to centre
+		if (usingSnapTurn)
+		{
+			if (turnX > 0.7f)
+			{
+				if (snapReady)
+				{
+					// stick right -> turn right (yaw decreases in Quake)
+					vr_turnDelta -= vr_turn_angle->value;
+					snapReady = qfalse;
+				}
+			}
+			else if (turnX < -0.7f)
+			{
+				if (snapReady)
+				{
+					vr_turnDelta += vr_turn_angle->value;
+					snapReady = qfalse;
+				}
+			}
+			else if (turnX > -0.3f && turnX < 0.3f)
+			{
+				snapReady = qtrue;
+			}
+		}
+		else if (fabs(turnX) > 0.1f) // smooth turn
+		{
+			vr_turnDelta -= (vr_turn_angle->value / 10.0f) * turnX;
+		}
+
+		// Keep snapTurn in the shared struct in sync (cgame may read it).
+		vr.snapTurn += vr_turnDelta;
+		while (vr.snapTurn >  180.0f) vr.snapTurn -= 360.0f;
+		while (vr.snapTurn < -180.0f) vr.snapTurn += 360.0f;
+	}
+
+	// ---- Buttons ----
+	// Shoot: dominant-hand trigger.
+	if (pDom->Buttons & xrButton_Trigger)
+	{
+		vr_controllerButtons |= EF_BUTTON_ATTACK;
+	}
+
+	// Dominant face button 1 (A right / X left):
+	//  - during a scripted cinematic -> BUTTON_USE_HOLDABLE, which the game's
+	//    ClientCinematicThink treats as "skip the cutscene" (a fresh press
+	//    toggles the skip/fast-forward);
+	//  - otherwise -> jump (upmove +127).
+	if (pDom->Buttons & domFace1)
+	{
+		if (vr.cin_camera)
+			vr_controllerButtons |= EF_BUTTON_USE_HOLDABLE;
+		else
+			vr_controllerUpMove = 127;
+	}
+
+	// Use: dominant face button 2 (B right / Y left) -> BUTTON_USE.
+	if (pDom->Buttons & domFace2)
+	{
+		vr_controllerButtons |= EF_BUTTON_USE;
+	}
+
+	// Crouch: off-hand grip (squeeze) -> upmove -127.  Takes priority over jump
+	// only if jump isn't pressed (jump already set upmove to +127 above).
+	if ((pOff->Buttons & xrButton_GripTrigger) && vr_controllerUpMove == 0)
+	{
+		vr_controllerUpMove = -127;
+	}
+
+	// Mission objectives: HOLD the off-hand face button 1 to show the mission-info
+	// screen -- the cgame '+info'/'-info' commands the desktop binds to a key
+	// (shows while held).  Edge-detected so we issue each command once.
+	{
+		qboolean infoNow = (pOff->Buttons & offFace1) != 0;
+		qboolean infoWas = (pOffOld->Buttons & offFace1) != 0;
+		if (infoNow && !infoWas)      Cbuf_AddText("+info\n");
+		else if (!infoNow && infoWas) Cbuf_AddText("-info\n");
+	}
+
+	// Menu button (the '|||' / menu button -- left controller on Touch) toggles
+	// the in-game menu so the player can Save / Load / Quit.  We inject an Escape
+	// key event on the press edge (a momentary tap: the down toggles the menu, the
+	// up is a no-op for Escape).  Checked on BOTH hands so it works whichever
+	// controller carries the menu button across vendors.
+	{
+		qboolean menuNow = ((leftTrackedRemoteState_new.Buttons | rightTrackedRemoteState_new.Buttons) & xrButton_Enter) != 0;
+		qboolean menuWas = ((leftTrackedRemoteState_old.Buttons | rightTrackedRemoteState_old.Buttons) & xrButton_Enter) != 0;
+		if (menuNow && !menuWas)
+		{
+			Com_QueueEvent(0, SE_KEY, K_ESCAPE, qtrue,  0, NULL);
+			Com_QueueEvent(0, SE_KEY, K_ESCAPE, qfalse, 0, NULL);
+		}
+	}
+
+	// Save state for edge detection next frame (RealRTCWXR pattern).
+	rightTrackedRemoteState_old = rightTrackedRemoteState_new;
+	leftTrackedRemoteState_old  = leftTrackedRemoteState_new;
+}
+
+/* ---- engine-facing getters (called from cl_input.c CL_FinishMove) ---- */
+
+// Thumbstick movement for this frame (-1..1-ish); engine scales by 127.
+void VR_GetControllerMove(float *forward, float *side)
+{
+	*forward = remote_movementForward;
+	*side    = remote_movementSideways;
+}
+
+// OR of EF_BUTTON_* the engine should set on the usercmd this frame.
+int VR_GetControllerButtons(void)
+{
+	return vr_controllerButtons;
+}
+
+// +127 jump / -127 crouch / 0 none -- engine writes to cmd->upmove.
+int VR_GetControllerUpMove(void)
+{
+	return vr_controllerUpMove;
+}
+
+// Yaw delta (degrees) to add to cl.viewangles[YAW] this frame (snap/smooth turn).
+float VR_GetTurnDelta(void)
+{
+	return vr_turnDelta;
 }

@@ -43,6 +43,7 @@ extern bool destroyed;
 // Called from onCreate on the JNI thread before the render thread starts, which
 // is exactly where RTCWQuest (also GL1-over-gl4es) initialises it.
 extern void initialize_gl4es( void );
+extern void EFXR_InstallCrashHandler( void );   // android_crash.c
 
 // The shared VR thread/JVM state (declared in android/TBXR_Common.h, defined here).
 ovrAppThread gAppThread;
@@ -117,6 +118,7 @@ void * AppThreadFunction( void * parm )
 	prctl( PR_SET_NAME, (long)"EFXR::main", 0, 0, 0 );
 
 	EFXR_RedirectStdioToLogcat();
+	EFXR_InstallCrashHandler();   // backtrace -> /sdcard/EFXR/efxr_crash.log + logcat
 
 	VR_main();
 

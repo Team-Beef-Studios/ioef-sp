@@ -592,7 +592,16 @@ void CL_FinishMove( usercmd_t *cmd ) {
 		// PITCH: absolute from the HMD -- aim pitch is ENTIRELY head-controlled.
 		// The mouse must NOT influence it (else you look forward but shoot at the
 		// floor).  This overwrites any mouse pitch accumulated above.
-		cl.viewangles[PITCH] = vr.hmdorientation[PITCH];
+		//
+		// Subtract the server's pitch baseline (delta_angles[PITCH]): the server
+		// reconstructs ps.viewangles[PITCH] = cmd->angles[PITCH] + delta_angles[PITCH]
+		// (see IN_CenterView), and delta_angles captures the head pitch at spawn.
+		// Writing the raw HMD pitch left that baseline in, so the weapon fired at a
+		// constant pitch offset from the rendered view that varied with how the
+		// headset was tilted at game start.  Pre-subtracting it makes the resulting
+		// ps.viewangles[PITCH] equal the true HMD pitch -> fire matches look.
+		// (YAW avoids this by composing incrementally just above.)
+		cl.viewangles[PITCH] = vr.hmdorientation[PITCH] - SHORT2ANGLE(cl.snap.ps.delta_angles[PITCH]);
 
 		// Thumbstick turn (snap or smooth): apply the per-frame yaw delta from the
 		// VR layer INCREMENTALLY, exactly like the HMD yaw above, so it composes
