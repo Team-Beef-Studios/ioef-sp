@@ -72,6 +72,7 @@ module's live data.
 
 #include "client.h"
 #include "snd_local.h"
+#include "snd_codec.h"
 #include "../qcommon/sp_types.h"
 
 #ifdef BUILD_VR
@@ -129,8 +130,191 @@ static intptr_t CL_SP_GetSampleLengthMilliseconds( sfxHandle_t sfxHandle ) {
  */
 static int s_spVoiceEndTime[ MAX_GENTITIES ];
 
+/*
+ * NPC mouth lip-sync (gi.S_Override amplitude).
+ *
+ * The EF cgame animates a speaking head by swapping its head skin every render
+ * frame: head->customSkin = ci->headSkin + gi.S_Override[entNum], where the
+ * value is 0 (not talking), -1 (talking but silent this instant -> neutral
+ * mouth, force eyes open) or 1..4 (louder -> wider mouth frame).  The engine
+ * publishes that per-entity value through the S_Override backing array
+ * (sv_game_sp.c), refreshed each game frame from CL_SP_GetVoiceAmplitude below.
+ *
+ * The amplitude is JKXR's lip-sync envelope (same Raven lineage): for each
+ * voice clip we precompute, once, a per-1000-sample quantised loudness curve
+ * from the decoded PCM (S_PreProcessLipSync), then index it by wall-clock
+ * playback position.  Doing it from the decoded PCM via S_CodecLoad keeps it
+ * backend-agnostic -- it works identically whether the active sound system is
+ * OpenAL (the PCVR default) or the dma mixer (Quest) -- and needs no game-DLL
+ * change.  Values are stored as *signed* char: on arm64 (Quest) plain char is
+ * unsigned, which would turn the -1 "silent" sentinel into 255.
+ */
+#define SP_MAX_LIP_SFX 4096          /* envelope cache, keyed by sfxHandle */
+
+typedef enum {
+	SP_LIP_UNKNOWN = 0,              /* not yet attempted */
+	SP_LIP_NONE,                     /* attempted, no usable envelope */
+	SP_LIP_READY                     /* data[] valid */
+} spLipState_t;
+
+typedef struct {
+	signed char	*data;               /* one value (-1/1..4) per 1000 samples */
+	int		numBlocks;
+	int		rate;                    /* sample rate, for the time->block map */
+	int		state;
+} spLipSync_t;
+
+static spLipSync_t	s_spLip[ SP_MAX_LIP_SFX ];
+static char		s_spSfxName[ SP_MAX_LIP_SFX ][ MAX_QPATH ];
+
+static int		s_spVoiceStartTime[ MAX_GENTITIES ];
+static sfxHandle_t	s_spVoiceSfx[ MAX_GENTITIES ];
+
+static cvar_t	*s_lipThreshold[4];
+static cvar_t	*s_lipSync;
+
+static void CL_SP_EnsureLipCvars( void ) {
+	if ( s_lipSync ) {
+		return;
+	}
+	// Thresholds match JKXR/Raven defaults; tunable if a head's mouth skins
+	// don't span the full 1..4 range.  s_lipSync 0 reverts to the old binary
+	// "open while playing" behaviour for in-headset A/B comparison.
+	s_lipThreshold[0] = Cvar_Get( "s_threshold1", "0.5", 0 );
+	s_lipThreshold[1] = Cvar_Get( "s_threshold2", "4.0", 0 );
+	s_lipThreshold[2] = Cvar_Get( "s_threshold3", "7.0", 0 );
+	s_lipThreshold[3] = Cvar_Get( "s_threshold4", "8.0", 0 );
+	s_lipSync         = Cvar_Get( "s_lipSync",    "1",   CVAR_ARCHIVE );
+}
+
+// EF head "extensions" skins are laid out: +1 blink, +2 frown, +3 frown+blink,
+// +4 neutral, +5..+8 = mouth_1..mouth_4 (the actual open-mouth talking poses).
+// CG_PlayerHeadExtension does head->customSkin = headSkin + S_Override, so the
+// talking amplitude must be 5..8 to land on the mouth frames -- emitting 1..4
+// (JKXR's range, which there indexes FACE_TALK anims, not skins) selects the
+// blink/frown frames instead and just makes the face twitch.  -1 = silent this
+// instant (the cgame shows the neutral, eyes-open face and suppresses blink).
+#define SP_LIP_MOUTH_BASE 4
+
+static signed char CL_SP_LipQuantize( int sampleTotal, int volRange ) {
+	float	fv = (float)volRange;
+	float	st = (float)sampleTotal;
+	if ( st < fv * s_lipThreshold[0]->value ) {
+		// still playing but silent right now -- the scripts/face rely on -1
+		return -1;
+	} else if ( st < fv * s_lipThreshold[1]->value ) {
+		return SP_LIP_MOUTH_BASE + 1;   // mouth_1 (barely open)
+	} else if ( st < fv * s_lipThreshold[2]->value ) {
+		return SP_LIP_MOUTH_BASE + 2;   // mouth_2
+	} else if ( st < fv * s_lipThreshold[3]->value ) {
+		return SP_LIP_MOUTH_BASE + 3;   // mouth_3
+	}
+	return SP_LIP_MOUTH_BASE + 4;       // mouth_4 (widest)
+}
+
+// Remember the filename a sound handle was registered under so we can decode
+// the PCM later for lip-sync (backend-neutral -- the dma s_knownSfx[] table is
+// empty under OpenAL, so we can't recover the name from the handle otherwise).
+static void CL_SP_NoteSfxName( sfxHandle_t sfx, const char *name ) {
+	if ( sfx <= 0 || sfx >= SP_MAX_LIP_SFX || !name ) {
+		return;
+	}
+	Q_strncpyz( s_spSfxName[ sfx ], name, sizeof( s_spSfxName[ sfx ] ) );
+}
+
+// Decode a voice clip once and build its quantised loudness envelope.
+// Cached: runs at most once per unique sfx handle.
+static void CL_SP_BuildLipSync( sfxHandle_t sfx ) {
+	snd_info_t	info;
+	void		*pcm;
+	short		*pSamples;
+	spLipSync_t	*lip;
+	int		i, j, n, volRange, sampleTotal, s;
+
+	if ( sfx <= 0 || sfx >= SP_MAX_LIP_SFX ) {
+		return;
+	}
+	lip = &s_spLip[ sfx ];
+	if ( lip->state != SP_LIP_UNKNOWN ) {
+		return;                          // already attempted
+	}
+	lip->state = SP_LIP_NONE;            // pessimistic until we succeed
+	if ( !s_spSfxName[ sfx ][0] ) {
+		return;
+	}
+
+	pcm = S_CodecLoad( s_spSfxName[ sfx ], &info );
+	if ( !pcm ) {
+		return;
+	}
+	// Voice clips are mono 16-bit (WAV or decoded MP3).  Anything else just
+	// falls back to the constant-open mouth (never worse than before).
+	if ( info.width != 2 || info.channels != 1 ) {
+		Hunk_FreeTempMemory( pcm );
+		return;
+	}
+	n = info.size / info.width;          // actual mono samples decoded
+	if ( n < 1 ) {
+		Hunk_FreeTempMemory( pcm );
+		return;
+	}
+
+	CL_SP_EnsureLipCvars();
+	pSamples = (short *)pcm;
+
+	// fVolRange == peak amplitude of the clip (>>8), per JKXR.
+	volRange = 0;
+	for ( i = 0; i < n; i++ ) {
+		s = pSamples[i];
+		if ( s < 0 ) {
+			s = -s;
+		}
+		s >>= 8;
+		if ( s > volRange ) {
+			volRange = s;
+		}
+	}
+	if ( volRange < 1 ) {
+		volRange = 1;                    // silent clip: avoid all-loud bias
+	}
+
+	lip->numBlocks = ( n / 1000 ) + 1;
+	lip->data      = Z_Malloc( lip->numBlocks );
+	lip->rate      = info.rate;
+
+	// Mean-square energy over each 1000-sample block (sampled every 100th).
+	j = 0;
+	sampleTotal = 0;
+	for ( i = 0; i < n; i += 100 ) {
+		s = pSamples[i] >> 8;
+		sampleTotal += s * s;
+		if ( ( ( i + 100 ) % 1000 ) == 0 ) {
+			sampleTotal /= 10;
+			if ( j < lip->numBlocks ) {
+				lip->data[ j++ ] = CL_SP_LipQuantize( sampleTotal, volRange );
+			}
+			sampleTotal = 0;
+		}
+	}
+	// Trailing partial (<1000-sample) block.
+	if ( ( i % 1000 ) != 0 && j < lip->numBlocks ) {
+		int k = ( ( i - 100 ) % 1000 ) / 100;
+		if ( k != 0 ) {
+			sampleTotal /= k;
+		} else {
+			sampleTotal = 0;
+		}
+		lip->data[ j++ ] = CL_SP_LipQuantize( sampleTotal, volRange );
+	}
+
+	Hunk_FreeTempMemory( pcm );
+	lip->state = SP_LIP_READY;
+}
+
 void CL_SP_ClearVoiceTracking( void ) {
 	Com_Memset( s_spVoiceEndTime, 0, sizeof( s_spVoiceEndTime ) );
+	Com_Memset( s_spVoiceStartTime, 0, sizeof( s_spVoiceStartTime ) );
+	Com_Memset( s_spVoiceSfx, 0, sizeof( s_spVoiceSfx ) );
 }
 
 qboolean CL_SP_IsVoicePlaying( int entnum ) {
@@ -140,8 +324,50 @@ qboolean CL_SP_IsVoicePlaying( int entnum ) {
 	return ( Sys_Milliseconds() < s_spVoiceEndTime[ entnum ] ) ? qtrue : qfalse;
 }
 
-// Note that a voice clip has begun on an entity so ICARUS can wait for it.
-// CHAN_VOICE (3) and CHAN_VOICE_ATTEN (4) are the SP voice channels.
+// Per-entity mouth amplitude for gi.S_Override: 0 = not talking, -1 = talking
+// but silent right now, 1..4 = louder.  All non-zero values keep ICARUS's
+// voice-wait tasks held (they test gi.S_Override != 0), so scripted-VO timing
+// (e.g. the borg1 intro) is unchanged from the old binary behaviour.
+int CL_SP_GetVoiceAmplitude( int entnum ) {
+	spLipSync_t	*lip;
+	sfxHandle_t	sfx;
+	int		elapsed, block;
+
+	if ( entnum < 0 || entnum >= MAX_GENTITIES ) {
+		return 0;
+	}
+	if ( !CL_SP_IsVoicePlaying( entnum ) ) {
+		return 0;
+	}
+	CL_SP_EnsureLipCvars();
+	if ( !s_lipSync->integer ) {
+		return -1;                       // toggle off -> neutral (no lip-sync), gating kept
+	}
+	sfx = s_spVoiceSfx[ entnum ];
+	if ( sfx <= 0 || sfx >= SP_MAX_LIP_SFX ) {
+		return SP_LIP_MOUTH_BASE + 1;    // unknown clip -> hold a slight open mouth
+	}
+	lip = &s_spLip[ sfx ];
+	if ( lip->state != SP_LIP_READY || !lip->data || lip->rate < 1 ) {
+		return SP_LIP_MOUTH_BASE + 1;    // no envelope -> degrade gracefully
+	}
+	elapsed = Sys_Milliseconds() - s_spVoiceStartTime[ entnum ];
+	if ( elapsed < 0 ) {
+		elapsed = 0;
+	}
+	block = (int)( ( (double)elapsed * (double)lip->rate / 1000.0 ) / 1000.0 );
+	if ( block < 0 ) {
+		block = 0;
+	}
+	if ( block >= lip->numBlocks ) {
+		block = lip->numBlocks - 1;
+	}
+	return lip->data[ block ];
+}
+
+// Note that a voice clip has begun on an entity so ICARUS can wait for it and
+// the head can lip-sync to it.  CHAN_VOICE (3) and CHAN_VOICE_ATTEN (4) are the
+// SP voice channels.
 static void CL_SP_NoteVoiceSound( int entnum, int channel, sfxHandle_t sfx ) {
 	int ms;
 	if ( entnum < 0 || entnum >= MAX_GENTITIES ) {
@@ -152,7 +378,11 @@ static void CL_SP_NoteVoiceSound( int entnum, int channel, sfxHandle_t sfx ) {
 	}
 	ms = S_SoundDuration( sfx );
 	if ( ms > 0 ) {
-		s_spVoiceEndTime[ entnum ] = Sys_Milliseconds() + ms;
+		int now = Sys_Milliseconds();
+		s_spVoiceEndTime[ entnum ]   = now + ms;
+		s_spVoiceStartTime[ entnum ] = now;
+		s_spVoiceSfx[ entnum ]       = sfx;
+		CL_SP_BuildLipSync( sfx );       // lazy, cached
 	}
 }
 
@@ -428,7 +658,13 @@ intptr_t CL_SPCgameSystemCalls( intptr_t *args ) {
 		S_Respatialize( args[1], VMA(2), VMA(3), args[4] );
 		return 0;
 	case SPCG_S_REGISTERSOUND:
-		return S_RegisterSound( VMA(1), qfalse );
+	{
+		// Capture the filename so CL_SP_BuildLipSync can decode the PCM later
+		// for mouth lip-sync (backend-neutral name->handle map).
+		sfxHandle_t sfx = S_RegisterSound( VMA(1), qfalse );
+		CL_SP_NoteSfxName( sfx, VMA(1) );
+		return sfx;
+	}
 	case SPCG_S_STARTBACKGROUNDTRACK:
 		/* The SP cgame passes a NULL or empty string to stop the music track
 		   (e.g., during transitions between cinematic and gameplay).

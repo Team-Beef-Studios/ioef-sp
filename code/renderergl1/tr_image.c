@@ -1503,11 +1503,14 @@ static char *CommaParse( char **data_p ) {
 
 /*
 ===============
-RE_RegisterSkin
+R_RegisterSkinFile
 
+Registers a single .skin file (or a bare shader path) and returns a positive
+handle, or 0 on failure / default skin.  RE_RegisterSkin wraps this to add the
+Elite Force facial-animation "extensions" frame convention.
 ===============
 */
-qhandle_t RE_RegisterSkin( const char *name ) {
+static qhandle_t R_RegisterSkinFile( const char *name ) {
 	qhandle_t	hSkin;
 	skin_t		*skin;
 	skinSurface_t	*surf;
@@ -1611,6 +1614,70 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 	}
 
 	return hSkin;
+}
+
+/*
+===============
+RE_RegisterSkin
+
+Elite Force facial-animation "extensions" convention.  A head skin
+"<path>/head_foo.skin" ships alongside numbered frame skins
+"<path>/head_foo-1.skin", "-2.skin", ... (mouth-open / blink / frown poses).
+When such frames exist we register them at CONSECUTIVE handles immediately
+after the base skin and return the base handle NEGATED.  The SP cgame
+(CG_RegisterClientSkin, cg_main.cpp) detects that negative handle to set
+ci->extensions and then selects a pose with  headSkin + offset , where offset
+comes from gi.S_Override (lip-sync amplitude) or the blink/frown state -- which
+is how NPC mouths animate while speaking.  Stock ioquake3's RE_RegisterSkin
+always returned a positive handle, so extensions were never detected and faces
+stayed frozen.  Only head_*.skin files ship with -N companions, so applying the
+probe to every skin is safe (non-head skins simply have no frames).
+===============
+*/
+qhandle_t RE_RegisterSkin( const char *name ) {
+	qhandle_t	base, h;
+	char		exName[MAX_QPATH];
+	int		nameLen, stemLen, n;
+	qboolean	haveExt = qfalse;
+
+	base = R_RegisterSkinFile( name );
+	if ( base <= 0 ) {
+		return base;			// failed, or the default skin
+	}
+
+	// Only real .skin files can carry frame companions.
+	nameLen = strlen( name );
+	if ( nameLen < 5 || Q_stricmp( name + nameLen - 5, ".skin" ) ) {
+		return base;
+	}
+	stemLen = nameLen - 5;		// strip the trailing ".skin"
+
+	for ( n = 1; n < 64; n++ ) {
+		void	*buf;
+		long	flen;
+
+		Com_sprintf( exName, sizeof( exName ), "%.*s-%d.skin", stemLen, name, n );
+
+		// Probe for existence first so a missing frame doesn't leak an empty
+		// skin slot (R_RegisterSkinFile allocates before it reads the file).
+		flen = ri.FS_ReadFile( exName, &buf );
+		if ( buf ) {
+			ri.FS_FreeFile( buf );
+		}
+		if ( flen <= 0 ) {
+			break;				// stop at the first gap in the sequence
+		}
+
+		h = R_RegisterSkinFile( exName );
+		if ( h <= 0 ) {
+			break;
+		}
+		// h is base + n (handles are allocated consecutively, and head frames
+		// are only ever registered through this path).
+		haveExt = qtrue;
+	}
+
+	return haveExt ? -base : base;
 }
 
 

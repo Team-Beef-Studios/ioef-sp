@@ -1667,6 +1667,7 @@ static int		s_override_dummy[SP_MAX_GENTITIES];
 // Refresh gi.S_Override from the sound backend's voice-playback state.  Must
 // run before ge->RunFrame so the game's task checks see current data.
 extern qboolean CL_SP_IsVoicePlaying( int entnum );
+extern int CL_SP_GetVoiceAmplitude( int entnum );
 static void SV_SP_UpdateVoiceOverride( void ) {
 	int i;
 	// During a cinematic skip (the use-holdable key ramps timescale up and sets
@@ -1677,8 +1678,14 @@ static void SV_SP_UpdateVoiceOverride( void ) {
 		Com_Memset( s_override_dummy, 0, sizeof( s_override_dummy ) );
 		return;
 	}
+	// Per-entity mouth amplitude (lip-sync): 0 = not talking, -1 = talking but
+	// silent this instant, 1..4 = louder.  The EF cgame applies this as a head
+	// skin offset (cg_players.cpp CG_PlayerHeadExtension), so the mouth animates
+	// per syllable instead of locking to one frame.  All non-zero values are
+	// still "playing" for ICARUS's voice-wait tasks, so scripted-VO timing
+	// (e.g. the borg1 intro) is unchanged.
 	for ( i = 0; i < SP_MAX_GENTITIES; i++ ) {
-		s_override_dummy[i] = CL_SP_IsVoicePlaying( i ) ? 1 : 0;
+		s_override_dummy[i] = CL_SP_GetVoiceAmplitude( i );
 	}
 }
 
