@@ -92,6 +92,7 @@ module's live data.
  * the start of a specific gentity_t slot in the game module's entity array.
  */
 extern void *SV_SP_GetRawPlayerState( void );
+extern qboolean SV_SP_GetCommittedPlayerState( int serverTime, void *out );
 extern sp_entityState_t *SV_SP_GetRawEntityState( int entNum );
 extern sfx_t s_knownSfx[];
 extern int s_numSfx;
@@ -663,12 +664,20 @@ intptr_t CL_SPCgameSystemCalls( intptr_t *args ) {
 		spSnap->numConfigstringChanges = 0;
 		spSnap->configstringNum = 0;
 
-		/* PlayerState: copy raw SP data directly from the game module's memory.
-		   SV_SP_GetRawPlayerState() returns a pointer to the beginning of the
-		   SP gclient_t, which starts with sp_playerState_t.  This gives us
-		   all SP-specific fields (leanofs, borgAdaptHits, pushVec, etc.)
-		   that would be lost if we tried to translate from ioEF playerState_t. */
-		{
+		/* PlayerState: copy the COMMITTED SP player state for THIS snapshot's
+		   serverTime, not the live state.  The committed ring (sv_game_sp.c)
+		   captures the player's sp_playerState_t once per server frame keyed
+		   by serverTime, so consecutive snapshots (cg.snap / cg.nextSnap)
+		   carry DISTINCT states and the SP cgame can interpolate the local
+		   player between them for smooth render-rate motion -- exactly like
+		   JKXR / stock Q3.  Using the live state here made every snapshot's ps
+		   identical within a 20Hz tick, leaving interpolation nothing to lerp
+		   (body stepped at sv_fps = judder in VR).
+
+		   Fall back to the live state on the first frame or if this serverTime
+		   has aged out of the ring.  Either way we preserve all SP-specific
+		   fields (leanofs, borgAdaptHits, pushVec, etc.). */
+		if ( !SV_SP_GetCommittedPlayerState( tempSnap.serverTime, &spSnap->ps ) ) {
 			void *rawPS = SV_SP_GetRawPlayerState();
 			if ( rawPS ) {
 				Com_Memcpy( &spSnap->ps, rawPS, sizeof( sp_playerState_t ) );

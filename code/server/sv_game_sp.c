@@ -777,6 +777,68 @@ static void SV_SP_SyncAllEntities( void ) {
 	}
 }
 
+// ============================================================================
+// Committed playerState ring -- smooth render-rate body movement in VR.
+//
+// The SP cgame renders the local player by INTERPOLATING between two
+// snapshots (cg.snap / cg.nextSnap), exactly like JKXR and stock Q3.  For
+// that to produce smooth motion the two snapshots must carry DIFFERENT
+// player states -- the authoritative state committed at each snapshot's
+// serverTime.  SV_SP_GetRawPlayerState() returns the LIVE state, which only
+// changes at the 20Hz game-frame rate and is identical for every snapshot
+// fetched within a tick, so interpolation had nothing to lerp and the body
+// stepped at 20Hz (judder).
+//
+// We capture the live sp_playerState_t once per server frame into a small
+// ring keyed by that frame's serverTime (== sv.time, the same value
+// sv_snapshot.c stamps on the snapshot).  SPCG_GETSNAPSHOT then looks up the
+// committed state matching the requested snapshot's serverTime, so
+// consecutive snapshots differ and interpolation is smooth.
+// ============================================================================
+#define SV_SP_PS_RING_SIZE PACKET_BACKUP	/* 32, matches client cl.snapshots[] */
+typedef struct {
+	int				serverTime;
+	qboolean		valid;
+	sp_playerState_t ps;
+} sv_sp_ps_committed_t;
+static sv_sp_ps_committed_t	sv_sp_psRing[ SV_SP_PS_RING_SIZE ];
+static int					sv_sp_frameCounter;
+
+// Clear the ring so frames from a previous map/load cannot match.
+static void SV_SP_ResetCommittedPlayerStates( void ) {
+	Com_Memset( sv_sp_psRing, 0, sizeof( sv_sp_psRing ) );
+	sv_sp_frameCounter = 0;
+}
+
+// Capture the live player state for this server frame, keyed by serverTime.
+static void SV_SP_CommitPlayerState( int serverTime ) {
+	sp_gentity_t			*playerEnt;
+	sv_sp_ps_committed_t	*slot;
+
+	if ( !ge || !ge->gentities ) return;
+	playerEnt = (sp_gentity_t *)ge->gentities;
+	if ( !playerEnt->client ) return;
+
+	slot = &sv_sp_psRing[ sv_sp_frameCounter++ & ( SV_SP_PS_RING_SIZE - 1 ) ];
+	slot->serverTime = serverTime;
+	slot->valid = qtrue;
+	Com_Memcpy( &slot->ps, playerEnt->client, sizeof( sp_playerState_t ) );
+}
+
+// Look up the committed player state for a given snapshot serverTime.
+// Returns qtrue and fills *out on a match; qfalse (caller falls back to the
+// live state) for the first frame or a serverTime that has aged out.
+qboolean SV_SP_GetCommittedPlayerState( int serverTime, void *out ) {
+	int i;
+	for ( i = 0; i < SV_SP_PS_RING_SIZE; i++ ) {
+		if ( sv_sp_psRing[i].valid && sv_sp_psRing[i].serverTime == serverTime ) {
+			Com_Memcpy( out, &sv_sp_psRing[i].ps, sizeof( sp_playerState_t ) );
+			return qtrue;
+		}
+	}
+	return qfalse;
+}
+
 // Reset the pending-load state.  Called after a load completes or fails.
 static void SV_SP_ClearPendingLoad( void ) {
 	sv_sp_pendingLoadType = eNO;
@@ -2438,6 +2500,7 @@ void SV_SP_ShutdownGameProgs( void ) {
 	sv.gameClients = NULL;
 	sv.num_entities = 0;
 	sv_sp_savedGameJustLoaded = eNO;
+	SV_SP_ResetCommittedPlayerStates();
 
 	Com_Printf( "SP game module shut down\n" );
 }
@@ -2519,6 +2582,7 @@ void SV_SP_InitGameVM( void ) {
 	memset( sv_sp_entities, 0, sizeof( sv_sp_entities ) );
 	entityDataLocated = qfalse;
 	sv_sp_savedGameJustLoaded = eNO;
+	SV_SP_ResetCommittedPlayerStates();
 	Q_strncpyz( loadQPath, sv_sp_pendingLoadQPath, sizeof( loadQPath ) );
 
 	// Initialize the game module
@@ -2694,6 +2758,10 @@ intptr_t QDECL SV_SP_GameVmMain( int command, ... ) {
 		ge->RunFrame( arg0 );
 		// Sync again after the frame for snapshot building
 		SV_SP_SyncAllEntities();
+		// Capture the committed player state for this server frame (keyed by
+		// serverTime == arg0 == sv.time) so the SP cgame can interpolate the
+		// local player between distinct snapshots for smooth render-rate motion.
+		SV_SP_CommitPlayerState( arg0 );
 		return 0;
 
 	case GAME_CONSOLE_COMMAND:

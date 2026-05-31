@@ -71,6 +71,7 @@ cvar_t	*cl_timeout;
 cvar_t	*cl_maxpackets;
 cvar_t	*cl_packetdup;
 cvar_t	*cl_timeNudge;
+cvar_t	*cl_spInterpDelay;
 cvar_t	*cl_showTimeDelta;
 cvar_t	*cl_freezeDemo;
 
@@ -3651,6 +3652,11 @@ void CL_Init( void ) {
 	cl_timeout = Cvar_Get ("cl_timeout", "200", 0);
 
 	cl_timeNudge = Cvar_Get ("cl_timeNudge", "0", CVAR_TEMP );
+	// SP interpolation buffer (ms) lagged onto the cgame view-time so a local
+	// server's zero-latency snapshots always have a bracketing nextSnap to
+	// interpolate toward.  -1 = auto (one snapshot interval = 1000/sv_fps);
+	// 0 = disabled (e.g. for zero-latency prediction).  See CL_CGameRendering.
+	cl_spInterpDelay = Cvar_Get ("cl_spInterpDelay", "-1", CVAR_ARCHIVE );
 	cl_shownet = Cvar_Get ("cl_shownet", "0", CVAR_TEMP );
 	cl_showSend = Cvar_Get ("cl_showSend", "0", CVAR_TEMP );
 	cl_showTimeDelta = Cvar_Get ("cl_showTimeDelta", "0", CVAR_TEMP );

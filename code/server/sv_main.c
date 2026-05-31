@@ -1112,6 +1112,22 @@ void SV_Frame( int msec ) {
 
 	if (!com_dedicated->integer) SV_BotFrame (sv.time + sv.timeResidual);
 
+	// Only proceed (run a game tick + send snapshots) when a server frame is
+	// actually due.  Without this gate, a local/listen server runs SV_Frame --
+	// and therefore SV_SendClientMessages() -- every CLIENT render frame.  The
+	// loopback SP client (rate control is bypassed for NA_LOOPBACK in
+	// SV_SendClientMessages) then receives a fresh snapshot EVERY frame carrying
+	// an unchanged, sv_fps-rate serverTime.  That sets cl.newSnapshots every
+	// frame, so CL_AdjustTimeDelta drifts serverTimeDelta every frame and
+	// freezes cl.serverTime -> cg.time stops advancing between ticks -> juddery
+	// body movement (starves BOTH interpolation and prediction).  Gating the
+	// send to the tick rate gives the client genuine sv_fps snapshot delivery,
+	// so cl.serverTime advances smoothly between ticks.  This matches JKXR/Raven
+	// SP (and stock ioq3's dedicated path, which already returns early here).
+	if ( sv.timeResidual < frameMsec ) {
+		return;
+	}
+
 	// if time is about to hit the 32nd bit, kick all clients
 	// and clear sv.time, rather
 	// than checking for negative time wraparound everywhere.

@@ -182,6 +182,7 @@ void VR_HandleControllerInput()
 	ovrTrackedController       *pDomTrack;   // dominant-hand aim pose (menu pointer)
 	int domFace1, domFace2;   // dominant-hand face buttons (jump, use)
 	int offFace1;             // off-hand face button 1 (hold = mission objectives)
+	int offFace2;             // off-hand face button 2 (toggle in-game menu)
 	if (vr_control_scheme->integer == LEFT_HANDED_DEFAULT)
 	{
 		pDom = &leftTrackedRemoteState_new;
@@ -192,6 +193,7 @@ void VR_HandleControllerInput()
 		domFace1 = xrButton_X;   // jump
 		domFace2 = xrButton_Y;   // use
 		offFace1 = xrButton_A;   // off-hand (right) primary -> mission info
+		offFace2 = xrButton_B;   // off-hand (right) secondary -> menu
 	}
 	else
 	{
@@ -203,6 +205,7 @@ void VR_HandleControllerInput()
 		domFace1 = xrButton_A;   // jump
 		domFace2 = xrButton_B;   // use
 		offFace1 = xrButton_X;   // off-hand (left) primary -> mission info
+		offFace2 = xrButton_Y;   // off-hand (left) secondary -> menu
 	}
 
 	// vr_switch_sticks swaps which stick moves vs turns (the move stick is
@@ -240,6 +243,10 @@ void VR_HandleControllerInput()
 		// Menu/back button (either hand) -> Escape (back out / close the menu).
 		VR_MenuButtonKey(&leftTrackedRemoteState_new,  &leftTrackedRemoteState_old,  xrButton_Enter, K_ESCAPE);
 		VR_MenuButtonKey(&rightTrackedRemoteState_new, &rightTrackedRemoteState_old, xrButton_Enter, K_ESCAPE);
+		// Off-hand face button 2 (Y right-handed / B left-handed) also closes the
+		// menu -- SteamVR hijacks the system menu button, so this is the reliable
+		// way to toggle our in-game menu.
+		VR_MenuButtonKey(pOff, pOffOld, offFace2, K_ESCAPE);
 
 		// Save state for edge detection next frame, then we're done.
 		rightTrackedRemoteState_old = rightTrackedRemoteState_new;
@@ -303,11 +310,40 @@ void VR_HandleControllerInput()
 		while (vr.snapTurn < -180.0f) vr.snapTurn += 360.0f;
 	}
 
+	// ---- Weapon switch: turn-hand (primary) thumbstick Y -> next/prev weapon ----
+	// Temporary mapping until a weapon wheel.  Turning only uses the stick's X,
+	// so its Y is free: push UP = weapnext, DOWN = weapprev.  Edge-detected (one
+	// switch per flick; re-arms when the stick returns toward centre), same model
+	// as snap-turn.  Routed through the cgame's existing weapnext/weapprev cmds.
+	{
+		float wy = pTurnStick->y;
+		static qboolean weapReady = qtrue;
+		if (wy > 0.7f)
+		{
+			if (weapReady) { Cbuf_AddText("weapnext\n"); weapReady = qfalse; }
+		}
+		else if (wy < -0.7f)
+		{
+			if (weapReady) { Cbuf_AddText("weapprev\n"); weapReady = qfalse; }
+		}
+		else if (wy > -0.3f && wy < 0.3f)
+		{
+			weapReady = qtrue;
+		}
+	}
+
 	// ---- Buttons ----
 	// Shoot: dominant-hand trigger.
 	if (pDom->Buttons & xrButton_Trigger)
 	{
 		vr_controllerButtons |= EF_BUTTON_ATTACK;
+	}
+
+	// Secondary / alt fire: off-hand trigger.  (Dominant trigger = primary fire,
+	// off-hand trigger = alt fire -- the off-hand trigger is otherwise unused.)
+	if (pOff->Buttons & xrButton_Trigger)
+	{
+		vr_controllerButtons |= EF_BUTTON_ALT_ATTACK;
 	}
 
 	// Dominant face button 1 (A right / X left):
@@ -352,8 +388,14 @@ void VR_HandleControllerInput()
 	// up is a no-op for Escape).  Checked on BOTH hands so it works whichever
 	// controller carries the menu button across vendors.
 	{
-		qboolean menuNow = ((leftTrackedRemoteState_new.Buttons | rightTrackedRemoteState_new.Buttons) & xrButton_Enter) != 0;
-		qboolean menuWas = ((leftTrackedRemoteState_old.Buttons | rightTrackedRemoteState_old.Buttons) & xrButton_Enter) != 0;
+		// The dedicated menu button (xrButton_Enter, either hand) OR the off-hand
+		// face button 2 (Y right-handed / B left-handed) opens the menu.  The Y
+		// alias exists because SteamVR hijacks the physical menu button for its
+		// own dashboard, leaving our in-game menu otherwise unreachable there.
+		qboolean menuNow = (((leftTrackedRemoteState_new.Buttons | rightTrackedRemoteState_new.Buttons) & xrButton_Enter) != 0)
+			|| ((pOff->Buttons & offFace2) != 0);
+		qboolean menuWas = (((leftTrackedRemoteState_old.Buttons | rightTrackedRemoteState_old.Buttons) & xrButton_Enter) != 0)
+			|| ((pOffOld->Buttons & offFace2) != 0);
 		if (menuNow && !menuWas)
 		{
 			Com_QueueEvent(0, SE_KEY, K_ESCAPE, qtrue,  0, NULL);

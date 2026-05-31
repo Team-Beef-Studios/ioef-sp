@@ -917,7 +917,46 @@ CL_CGameRendering
 =====================
 */
 void CL_CGameRendering( stereoFrame_t stereo ) {
-	VM_Call( cgvm, CG_DRAW_ACTIVE_FRAME, cl.serverTime, stereo, clc.demoplaying );
+	int renderTime = cl.serverTime;
+
+#ifdef ELITEFORCE
+	// SP interpolation buffer.  A local (loopback) server delivers snapshots
+	// with ~zero latency, so cl.serverTime sits right at -- and quickly races
+	// ahead of -- the latest snapshot.  The SP cgame interpolates the local
+	// player between cg.snap and cg.nextSnap, which needs a snapshot AHEAD of
+	// the render time; without one it holds the last snapshot and the body
+	// steps at sv_fps (very visible at low sv_fps).  We lag ONLY the cgame's
+	// view time (never cl.serverTime, which stamps usercmds) by ~one snapshot
+	// interval so a bracketing nextSnap always exists.  Scales with sv_fps, so
+	// it's smooth at any tick rate.  Disabled when the cgame is using render-
+	// rate prediction (cg_spInterp 0), which wants zero latency.
+	if ( com_sv_running->integer && Cvar_VariableIntegerValue( "sp_game" )
+			&& cl.snap.valid && Cvar_VariableIntegerValue( "cg_spInterp" ) ) {
+		// Ramp the applied delay up from 0 at (re)activation so the lagged
+		// render time can never fall below our first snapshot -- that would
+		// trip "CG_ProcessSnapshots: cg.snap->serverTime > cg.time".  The ramp
+		// anchor resets on a backward serverTime jump (level load / restart).
+		static int interpAnchor = 0;
+		static int interpLast = 0;
+		int target = cl_spInterpDelay->integer;
+		int ramp, applied;
+
+		if ( target < 0 ) {	// auto = one snapshot interval
+			int fps = Cvar_VariableIntegerValue( "sv_fps" );
+			target = ( fps > 0 ) ? ( 1000 / fps ) : 50;
+		}
+		if ( interpAnchor == 0 || cl.serverTime < interpLast ) {
+			interpAnchor = cl.serverTime;
+		}
+		interpLast = cl.serverTime;
+
+		ramp = cl.serverTime - interpAnchor;	// grows from 0, tracks realtime
+		applied = ( ramp < target ) ? ramp : target;
+		renderTime = cl.serverTime - applied;	// >= interpAnchor >= first snap
+	}
+#endif
+
+	VM_Call( cgvm, CG_DRAW_ACTIVE_FRAME, renderTime, stereo, clc.demoplaying );
 	VM_Debug( 0 );
 }
 
