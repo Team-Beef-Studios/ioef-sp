@@ -273,6 +273,28 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder)
 				"Cannot determine display aspect, assuming 1.333\n" );
 	}
 
+	// Flat-screen safety net (left unconditional -- like the VR mirror-window cap
+	// below -- because sdl_glimp.c builds into the renderer, which is NOT compiled
+	// with -DBUILD_VR; the runtime vr_enable check is the real gate).  A VR session
+	// (VR_PreRendererInit) sets r_mode -1 + r_customwidth/height to the per-eye
+	// render size, usually LARGER than the desktop -- and those are CVAR_ARCHIVE,
+	// so they persist to the config.  A later flat launch (vr_enable 0) would then
+	// read those VR dimensions and render far bigger than the window, clipping the
+	// image.  When running flat with a custom resolution that exceeds the desktop,
+	// treat it as a stale VR override and fall back to the desktop resolution.
+	if ( mode == -1 && desktopMode.h > 0 &&
+	     !ri.Cvar_VariableIntegerValue( "vr_enable" ) &&
+	     ( ri.Cvar_VariableIntegerValue( "r_customwidth" )  > desktopMode.w ||
+	       ri.Cvar_VariableIntegerValue( "r_customheight" ) > desktopMode.h ) )
+	{
+		ri.Printf( PRINT_ALL, "Flat mode: ignoring stale VR render resolution "
+		           "(%dx%d > desktop %dx%d) -- using desktop resolution.\n",
+		           ri.Cvar_VariableIntegerValue( "r_customwidth" ),
+		           ri.Cvar_VariableIntegerValue( "r_customheight" ),
+		           desktopMode.w, desktopMode.h );
+		mode = -2;
+	}
+
 	ri.Printf (PRINT_ALL, "...setting mode %d:", mode );
 
 	if (mode == -2)

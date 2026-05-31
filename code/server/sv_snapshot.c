@@ -515,6 +515,16 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	}
 	svEnt = &sv.svEntities[ clientNum ];
 
+#ifdef ELITEFORCE
+	// EF singleplayer: the SP cgame renders the LOCAL PLAYER from the snapshot
+	// packet -- its regenerate-the-player-from-the-playerstate add is commented
+	// out (cg_ents.cpp CG_AddPacketEntities: "not needed now that player is in the
+	// snap packet").  So unlike stock Q3 we must NOT exclude the player's own
+	// entity here, or it never gets added to the scene and cg_thirdPerson shows an
+	// invisible player.  Including it lets normal PVS add entity 0.  MP keeps the
+	// stock exclusion (its cgame regenerates the player from the playerstate).
+	if ( !Cvar_VariableIntegerValue( "sp_game" ) )
+#endif
 	svEnt->snapshotCounter = sv.snapshotCounter;
 
 #ifdef ELITEFORCE
