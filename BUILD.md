@@ -1,7 +1,7 @@
 # Building ioEF with Elite Force Singleplayer Support
 
 This document covers building the ioEF engine (with SP bridge code) and the
-Elite Reinforce game DLLs from source on Windows.
+Elite Force VR game DLLs from source on Windows.
 
 ---
 
@@ -17,12 +17,12 @@ make ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_Q
 # (See "Build the Engine" below for why these flags are needed.)
 
 # 2. Game DLLs (VS Developer Command Prompt, or full path to MSBuild.exe)
-cd C:\DEV\GitHub\Public\Elite-Reinforce
+cd C:\DEV\GitHub\Public\Elite-Force-VR
 msbuild EF_SPMod.sln /p:Configuration=Release /p:Platform=x86 ^
         /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
 
 # 3. Deploy
-cp /c/DEV/GitHub/Public/Elite-Reinforce/Release/ef{game,ui}x86.dll \
+cp /c/DEV/GitHub/Public/Elite-Force-VR/Release/ef{game,ui}x86.dll \
    build/release-mingw32-x86/baseEF/
 
 # 4. Run
@@ -41,10 +41,10 @@ DLLs at runtime via `GetGameAPI` / `dllEntry` / `vmMain` exports.
 | Component | Toolchain | Output |
 |-----------|-----------|--------|
 | **ioEF engine** | MSYS2 + MinGW (32-bit GCC) | `ioquake3.x86.exe`, `renderer_opengl1_x86.dll` |
-| **Elite Reinforce SP DLLs** | Visual Studio 2017+ | `efgamex86.dll`, `efuix86.dll` |
+| **Elite Force VR SP DLLs** | Visual Studio 2017+ | `efgamex86.dll`, `efuix86.dll` |
 
 > **Why two toolchains?** The ioEF engine inherits ioquake3's GNU Make build
-> system, which targets GCC/MinGW. The Elite Reinforce game DLLs were developed
+> system, which targets GCC/MinGW. The Elite Force VR game DLLs were developed
 > with Visual Studio and rely on MSVC-specific project files. Both produce
 > standard Win32 DLLs with C linkage, so they interoperate at runtime regardless
 > of which compiler built them.
@@ -176,7 +176,7 @@ make PLATFORM=mingw32 ARCH=x86 \
 
 ### Using Visual Studio GUI
 
-1. Open `C:\DEV\GitHub\Public\Elite-Reinforce\EF_SPMod.sln` in Visual Studio.
+1. Open `C:\DEV\GitHub\Public\Elite-Force-VR\EF_SPMod.sln` in Visual Studio.
 2. Set the solution configuration to **Release** and platform to **x86**.
 3. If prompted that the toolset/SDK (v141 / SDK 10.0.15063.0) is missing,
    right-click the solution &rarr; *Retarget solution* and pick an installed
@@ -192,7 +192,7 @@ path). The solution platform is named **x86** (it maps to `Win32` internally),
 so pass `/p:Platform=x86`:
 
 ```cmd
-cd C:\DEV\GitHub\Public\Elite-Reinforce
+cd C:\DEV\GitHub\Public\Elite-Force-VR
 
 msbuild EF_SPMod.sln /p:Configuration=Release /p:Platform=x86 /m
 
@@ -208,7 +208,7 @@ msbuild EF_SPMod.sln /p:Configuration=Release /p:Platform=x86 ^
 ### Output
 
 ```
-Elite-Reinforce/Release/
+Elite-Force-VR/Release/
   efgamex86.dll    # SP game module (contains both game + cgame code)
   efgamex86.pdb    # Debug symbols
   efuix86.dll      # SP UI module
@@ -235,8 +235,8 @@ build/release-mingw32-x86/
   baseEF/
     pak0.pk3               # From the original EF1 game disc/install
     pak1.pk3               # (optional) Patch data
-    efgamex86.dll          # From Elite-Reinforce/Release/
-    efuix86.dll            # From Elite-Reinforce/Release/
+    efgamex86.dll          # From Elite-Force-VR/Release/
+    efuix86.dll            # From Elite-Force-VR/Release/
 ```
 
 ### Copying the mingw32 runtime DLLs
@@ -263,8 +263,8 @@ BUILDDIR="build/release-mingw32-x86/baseEF"
 cp "/c/Program Files (x86)/GOG Galaxy/Games/Star Trek Elite Force/baseEF/"*.pk3 "$BUILDDIR/"
 
 # Copy built SP DLLs
-cp /c/DEV/GitHub/Public/Elite-Reinforce/Release/efgamex86.dll "$BUILDDIR/"
-cp /c/DEV/GitHub/Public/Elite-Reinforce/Release/efuix86.dll   "$BUILDDIR/"
+cp /c/DEV/GitHub/Public/Elite-Force-VR/Release/efgamex86.dll "$BUILDDIR/"
+cp /c/DEV/GitHub/Public/Elite-Force-VR/Release/efuix86.dll   "$BUILDDIR/"
 ```
 
 ---
@@ -322,7 +322,7 @@ gdb ./ioquake3.x86.exe
 
 ### Debug symbols for game DLLs
 
-The `.pdb` files from the Elite-Reinforce Release build contain full debug
+The `.pdb` files from the Elite-Force-VR Release build contain full debug
 symbols. Place them next to the DLLs in `baseEF/` for Visual Studio's debugger
 or WinDbg to pick up. For GDB, the DWARF info is embedded in the DLL if built
 with the Debug configuration.
@@ -492,7 +492,7 @@ whether to reset settings, which blocks headless or automated launches.
 | Link error: undefined reference to `CL_ShutdownCGame` / `CL_SP_GetStoredSaveComment` / `CL_SP_CopySaveScreenshot` | The dedicated-server link pulling in client-only SP bridge symbols. Add `BUILD_SERVER=0` (SP uses the client binary only). |
 | `failed to load efgamex86.dll` | Ensure the DLL is in `baseEF/` and is 32-bit. |
 | `Unpure client detected` | Should be auto-fixed by SP mode setting `sv_pure 0`. If not, add `+set sv_pure 0` to launch args. |
-| `GetGameAPI returned NULL` | DLL loaded but export not found. Check DLL was built from Elite-Reinforce source (needs `GetGameAPI` export). |
+| `GetGameAPI returned NULL` | DLL loaded but export not found. Check DLL was built from Elite-Force-VR source (needs `GetGameAPI` export). |
 | `game API version mismatch` | DLL API version doesn't match expected version 6. Rebuild DLLs. |
 | Engine builds as 64-bit (`64-bit mode not compiled in`) | Use the MSYS2 MINGW32 shell, not MINGW64. If `uname -m` still reports `x86_64`, set `ARCH=x86` explicitly. |
 | Link fails: `cannot find .../win_resource.o` | The `windres` resource compile failed (often Error 127). Pass `WINDRES=windres` so it uses the unprefixed binary instead of a missing `i686-w64-mingw32-windres`. |
