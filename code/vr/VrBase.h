@@ -39,11 +39,10 @@ qboolean VR_GetFovTangents( float *tanLeft, float *tanRight, float *tanUp, float
    OpenXR eye poses * vr_worldscale.  Apply along refdef viewaxis[1]. */
 float    VR_GetEyeStereoSeparation( int eye );
 
-/* 6DoF positional head tracking.  VERTICAL: view-origin Z offset (Quake units)
-   for physical duck/stand -- add to refdef.vieworg[2].  HORIZONTAL: physical
-   lean/step -> player movement (RealRTCWXR-style) -- forward/side outputs scaled
-   by 127 into the usercmd. */
-float    VR_GetHeightOffset( void );
+/* 6DoF positional head tracking.  HORIZONTAL: physical lean/step -> player
+   movement (RealRTCWXR-style) -- forward/side outputs scaled by 127 into the
+   usercmd.  (Vertical duck/stand and the seated-height raise are handled on the
+   cgame side via the shared vr.height_offset / vr.worldscale; see cg_view.) */
 void     VR_GetPositionalMove( float *forward, float *side );
 
 /* ---- motion-controller input (injected by cl_input.c CL_FinishMove) ----

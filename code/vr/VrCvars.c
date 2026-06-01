@@ -11,7 +11,6 @@ Cvar_Get()s them.  Not called from engine startup yet (M1 is dead code).
 #include "VrCvars.h"
 
 cvar_t	*vr_worldscale;
-cvar_t	*vr_heightAdjust;
 cvar_t	*vr_height_offset;
 cvar_t	*vr_positional_factor;
 cvar_t	*vr_screen_dist;
@@ -26,7 +25,6 @@ cvar_t	*vr_switch_sticks;
 void VR_InitCvars(void)
 {
 	vr_worldscale            = Cvar_Get( "vr_worldscale", "32.0", CVAR_ARCHIVE );
-	vr_heightAdjust          = Cvar_Get( "vr_heightAdjust", "0.0", CVAR_ARCHIVE );
 	// Extra eye height in METRES added to the real HMD height -- raise the view
 	// for seated play (e.g. 0.6-0.9 to sit at standing height).  In-game eye
 	// height = (real HMD height from the floor + vr_height_offset) * vr_worldscale.

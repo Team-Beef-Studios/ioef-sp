@@ -17,7 +17,6 @@ be reinstated alongside the input layer in a later milestone.
 #include "../qcommon/qcommon.h"
 
 extern cvar_t	*vr_worldscale;
-extern cvar_t	*vr_heightAdjust;
 extern cvar_t	*vr_height_offset;
 extern cvar_t	*vr_positional_factor;
 extern cvar_t	*vr_screen_dist;

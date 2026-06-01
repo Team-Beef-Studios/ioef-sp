@@ -202,19 +202,6 @@ float VR_GetEyeStereoSeparation(int eye)
 	return (eye == 0) ? half : -half;
 }
 
-// 6DoF VERTICAL: how far the rendered view should drop/rise (Quake units) as the
-// player physically ducks/stands, relative to their standing height captured at
-// start (vr.maxHeight).  Added to refdef.vieworg[2] by the engine.  <= 0 when
-// crouched.  vr_heightAdjust nudges the standing eye height.
-float VR_GetHeightOffset(void)
-{
-	if (!gAppState.SessionActive)
-	{
-		return 0.0f;
-	}
-	return (vr.hmdposition[1] - vr.maxHeight + vr_heightAdjust->value) * vr_worldscale->value;
-}
-
 // 6DoF HORIZONTAL: physically leaning/stepping translates into player movement
 // (so the body follows the head, with collision) rather than a free-floating
 // view.  Matches RealRTCWXR: the per-frame HMD position delta (tracking space)
