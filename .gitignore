@@ -39,6 +39,7 @@ profile
 *.sdf
 *.opensdf
 *.suo
+*.vs
 mcp/node_modules/
 mcp/dist/
 build/

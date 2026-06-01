@@ -1,0 +1,492 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Win32"><Configuration>Debug</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A1B2C3D4-E5F6-4789-ABCD-0123456789AB}</ProjectGuid>
+    <Keyword>MakeFileProj</Keyword>
+    <ProjectName>ioef-sp</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType><UseDebugLibraries>false</UseDebugLibraries><PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType><UseDebugLibraries>true</UseDebugLibraries><PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <NMakeBuildCommandLine>set MSYSTEM=MINGW64
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make  ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>set MSYSTEM=MINGW64
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-release ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make  ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>set MSYSTEM=MINGW64
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-release ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
+    <NMakeOutput>build\release-mingw64-x86_64\ioquake3.x86_64.exe</NMakeOutput>
+    <NMakePreprocessorDefinitions>ELITEFORCE;BOTLIB;USE_RENDERER_DLOPEN;USE_OPENAL;USE_OPENAL_DLOPEN;USE_CURL;USE_CURL_DLOPEN;USE_VOIP;USE_CODEC_VORBIS;USE_CODEC_OPUS;USE_LOCAL_HEADERS;USE_INTERNAL_JPEG;PRODUCT_VERSION="1.38";ARCH_STRING="x86_64";WIN32;_WIN32;__MINGW32__;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>$(ProjectDir)code;$(ProjectDir)code\qcommon;$(ProjectDir)code\client;$(ProjectDir)code\server;$(ProjectDir)code\renderercommon;$(ProjectDir)code\botlib;$(ProjectDir)code\SDL2\include;$(ProjectDir)code\zlib;$(ProjectDir)code\jpeg-8c;$(ProjectDir)code\libcurl-7.35.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <NMakeBuildCommandLine>set MSYSTEM=MINGW64
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>set MSYSTEM=MINGW64
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>set MSYSTEM=MINGW64
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
+    <NMakeOutput>build\debug-mingw64-x86_64\ioquake3.x86_64.exe</NMakeOutput>
+    <NMakePreprocessorDefinitions>ELITEFORCE;BOTLIB;USE_RENDERER_DLOPEN;USE_OPENAL;USE_OPENAL_DLOPEN;USE_CURL;USE_CURL_DLOPEN;USE_VOIP;USE_CODEC_VORBIS;USE_CODEC_OPUS;USE_LOCAL_HEADERS;USE_INTERNAL_JPEG;PRODUCT_VERSION="1.38";ARCH_STRING="x86_64";WIN32;_WIN32;__MINGW32__;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>$(ProjectDir)code;$(ProjectDir)code\qcommon;$(ProjectDir)code\client;$(ProjectDir)code\server;$(ProjectDir)code\renderercommon;$(ProjectDir)code\botlib;$(ProjectDir)code\SDL2\include;$(ProjectDir)code\zlib;$(ProjectDir)code\jpeg-8c;$(ProjectDir)code\libcurl-7.35.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <NMakeBuildCommandLine>set MSYSTEM=MINGW32
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make  ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>set MSYSTEM=MINGW32
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-release ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make  ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>set MSYSTEM=MINGW32
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-release ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
+    <NMakeOutput>build\release-mingw32-x86\ioquake3.x86.exe</NMakeOutput>
+    <NMakePreprocessorDefinitions>ELITEFORCE;BOTLIB;USE_RENDERER_DLOPEN;USE_OPENAL;USE_OPENAL_DLOPEN;USE_CURL;USE_CURL_DLOPEN;USE_VOIP;USE_CODEC_VORBIS;USE_CODEC_OPUS;USE_LOCAL_HEADERS;USE_INTERNAL_JPEG;PRODUCT_VERSION="1.38";ARCH_STRING="x86";WIN32;_WIN32;__MINGW32__;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>$(ProjectDir)code;$(ProjectDir)code\qcommon;$(ProjectDir)code\client;$(ProjectDir)code\server;$(ProjectDir)code\renderercommon;$(ProjectDir)code\botlib;$(ProjectDir)code\SDL2\include;$(ProjectDir)code\zlib;$(ProjectDir)code\jpeg-8c;$(ProjectDir)code\libcurl-7.35.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <NMakeBuildCommandLine>set MSYSTEM=MINGW32
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>set MSYSTEM=MINGW32
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>set MSYSTEM=MINGW32
+set MSYS2_PATH_TYPE=inherit
+C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
+    <NMakeOutput>build\debug-mingw32-x86\ioquake3.x86.exe</NMakeOutput>
+    <NMakePreprocessorDefinitions>ELITEFORCE;BOTLIB;USE_RENDERER_DLOPEN;USE_OPENAL;USE_OPENAL_DLOPEN;USE_CURL;USE_CURL_DLOPEN;USE_VOIP;USE_CODEC_VORBIS;USE_CODEC_OPUS;USE_LOCAL_HEADERS;USE_INTERNAL_JPEG;PRODUCT_VERSION="1.38";ARCH_STRING="x86";WIN32;_WIN32;__MINGW32__;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>$(ProjectDir)code;$(ProjectDir)code\qcommon;$(ProjectDir)code\client;$(ProjectDir)code\server;$(ProjectDir)code\renderercommon;$(ProjectDir)code\botlib;$(ProjectDir)code\SDL2\include;$(ProjectDir)code\zlib;$(ProjectDir)code\jpeg-8c;$(ProjectDir)code\libcurl-7.35.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ClCompile Include="code\botlib\be_aas_bspq3.c" />
+    <ClCompile Include="code\botlib\be_aas_cluster.c" />
+    <ClCompile Include="code\botlib\be_aas_debug.c" />
+    <ClCompile Include="code\botlib\be_aas_entity.c" />
+    <ClCompile Include="code\botlib\be_aas_file.c" />
+    <ClCompile Include="code\botlib\be_aas_main.c" />
+    <ClCompile Include="code\botlib\be_aas_move.c" />
+    <ClCompile Include="code\botlib\be_aas_optimize.c" />
+    <ClCompile Include="code\botlib\be_aas_reach.c" />
+    <ClCompile Include="code\botlib\be_aas_route.c" />
+    <ClCompile Include="code\botlib\be_aas_routealt.c" />
+    <ClCompile Include="code\botlib\be_aas_sample.c" />
+    <ClCompile Include="code\botlib\be_ai_char.c" />
+    <ClCompile Include="code\botlib\be_ai_chat.c" />
+    <ClCompile Include="code\botlib\be_ai_gen.c" />
+    <ClCompile Include="code\botlib\be_ai_goal.c" />
+    <ClCompile Include="code\botlib\be_ai_move.c" />
+    <ClCompile Include="code\botlib\be_ai_weap.c" />
+    <ClCompile Include="code\botlib\be_ai_weight.c" />
+    <ClCompile Include="code\botlib\be_ea.c" />
+    <ClCompile Include="code\botlib\be_interface.c" />
+    <ClCompile Include="code\botlib\l_crc.c" />
+    <ClCompile Include="code\botlib\l_libvar.c" />
+    <ClCompile Include="code\botlib\l_log.c" />
+    <ClCompile Include="code\botlib\l_memory.c" />
+    <ClCompile Include="code\botlib\l_precomp.c" />
+    <ClCompile Include="code\botlib\l_script.c" />
+    <ClCompile Include="code\botlib\l_struct.c" />
+    <ClCompile Include="code\cgame\cg_consolecmds.c" />
+    <ClCompile Include="code\cgame\cg_draw.c" />
+    <ClCompile Include="code\cgame\cg_drawtools.c" />
+    <ClCompile Include="code\cgame\cg_effects.c" />
+    <ClCompile Include="code\cgame\cg_ents.c" />
+    <ClCompile Include="code\cgame\cg_event.c" />
+    <ClCompile Include="code\cgame\cg_info.c" />
+    <ClCompile Include="code\cgame\cg_localents.c" />
+    <ClCompile Include="code\cgame\cg_main.c" />
+    <ClCompile Include="code\cgame\cg_marks.c" />
+    <ClCompile Include="code\cgame\cg_particles.c" />
+    <ClCompile Include="code\cgame\cg_players.c" />
+    <ClCompile Include="code\cgame\cg_playerstate.c" />
+    <ClCompile Include="code\cgame\cg_predict.c" />
+    <ClCompile Include="code\cgame\cg_scoreboard.c" />
+    <ClCompile Include="code\cgame\cg_servercmds.c" />
+    <ClCompile Include="code\cgame\cg_snapshot.c" />
+    <ClCompile Include="code\cgame\cg_syscalls.c" />
+    <ClCompile Include="code\cgame\cg_view.c" />
+    <ClCompile Include="code\cgame\cg_weapons.c" />
+    <ClCompile Include="code\client\cl_avi.c" />
+    <ClCompile Include="code\client\cl_cgame.c" />
+    <ClCompile Include="code\client\cl_cgame_sp.c" />
+    <ClCompile Include="code\client\cl_cin.c" />
+    <ClCompile Include="code\client\cl_console.c" />
+    <ClCompile Include="code\client\cl_curl.c" />
+    <ClCompile Include="code\client\cl_input.c" />
+    <ClCompile Include="code\client\cl_keys.c" />
+    <ClCompile Include="code\client\cl_main.c" />
+    <ClCompile Include="code\client\cl_net_chan.c" />
+    <ClCompile Include="code\client\cl_parse.c" />
+    <ClCompile Include="code\client\cl_scrn.c" />
+    <ClCompile Include="code\client\cl_ui.c" />
+    <ClCompile Include="code\client\cl_ui_sp.c" />
+    <ClCompile Include="code\client\libmumblelink.c" />
+    <ClCompile Include="code\client\qal.c" />
+    <ClCompile Include="code\client\snd_adpcm.c" />
+    <ClCompile Include="code\client\snd_codec.c" />
+    <ClCompile Include="code\client\snd_codec_mp3.c" />
+    <ClCompile Include="code\client\snd_codec_ogg.c" />
+    <ClCompile Include="code\client\snd_codec_opus.c" />
+    <ClCompile Include="code\client\snd_codec_wav.c" />
+    <ClCompile Include="code\client\snd_dma.c" />
+    <ClCompile Include="code\client\snd_main.c" />
+    <ClCompile Include="code\client\snd_mem.c" />
+    <ClCompile Include="code\client\snd_mix.c" />
+    <ClCompile Include="code\client\snd_openal.c" />
+    <ClCompile Include="code\client\snd_wavelet.c" />
+    <ClCompile Include="code\game\ai_chat.c" />
+    <ClCompile Include="code\game\ai_cmd.c" />
+    <ClCompile Include="code\game\ai_dmnet.c" />
+    <ClCompile Include="code\game\ai_dmq3.c" />
+    <ClCompile Include="code\game\ai_main.c" />
+    <ClCompile Include="code\game\ai_team.c" />
+    <ClCompile Include="code\game\ai_vcmd.c" />
+    <ClCompile Include="code\game\bg_lib.c" />
+    <ClCompile Include="code\game\bg_misc.c" />
+    <ClCompile Include="code\game\bg_pmove.c" />
+    <ClCompile Include="code\game\bg_slidemove.c" />
+    <ClCompile Include="code\game\g_active.c" />
+    <ClCompile Include="code\game\g_arenas.c" />
+    <ClCompile Include="code\game\g_bot.c" />
+    <ClCompile Include="code\game\g_client.c" />
+    <ClCompile Include="code\game\g_cmds.c" />
+    <ClCompile Include="code\game\g_combat.c" />
+    <ClCompile Include="code\game\g_items.c" />
+    <ClCompile Include="code\game\g_main.c" />
+    <ClCompile Include="code\game\g_mem.c" />
+    <ClCompile Include="code\game\g_misc.c" />
+    <ClCompile Include="code\game\g_missile.c" />
+    <ClCompile Include="code\game\g_mover.c" />
+    <ClCompile Include="code\game\g_session.c" />
+    <ClCompile Include="code\game\g_spawn.c" />
+    <ClCompile Include="code\game\g_svcmds.c" />
+    <ClCompile Include="code\game\g_syscalls.c" />
+    <ClCompile Include="code\game\g_target.c" />
+    <ClCompile Include="code\game\g_team.c" />
+    <ClCompile Include="code\game\g_trigger.c" />
+    <ClCompile Include="code\game\g_utils.c" />
+    <ClCompile Include="code\game\g_weapon.c" />
+    <ClCompile Include="code\q3_ui\ui_addbots.c" />
+    <ClCompile Include="code\q3_ui\ui_atoms.c" />
+    <ClCompile Include="code\q3_ui\ui_cdkey.c" />
+    <ClCompile Include="code\q3_ui\ui_cinematics.c" />
+    <ClCompile Include="code\q3_ui\ui_confirm.c" />
+    <ClCompile Include="code\q3_ui\ui_connect.c" />
+    <ClCompile Include="code\q3_ui\ui_controls2.c" />
+    <ClCompile Include="code\q3_ui\ui_credits.c" />
+    <ClCompile Include="code\q3_ui\ui_demo2.c" />
+    <ClCompile Include="code\q3_ui\ui_display.c" />
+    <ClCompile Include="code\q3_ui\ui_gameinfo.c" />
+    <ClCompile Include="code\q3_ui\ui_ingame.c" />
+    <ClCompile Include="code\q3_ui\ui_loadconfig.c" />
+    <ClCompile Include="code\q3_ui\ui_main.c" />
+    <ClCompile Include="code\q3_ui\ui_menu.c" />
+    <ClCompile Include="code\q3_ui\ui_mfield.c" />
+    <ClCompile Include="code\q3_ui\ui_mods.c" />
+    <ClCompile Include="code\q3_ui\ui_network.c" />
+    <ClCompile Include="code\q3_ui\ui_options.c" />
+    <ClCompile Include="code\q3_ui\ui_playermodel.c" />
+    <ClCompile Include="code\q3_ui\ui_players.c" />
+    <ClCompile Include="code\q3_ui\ui_playersettings.c" />
+    <ClCompile Include="code\q3_ui\ui_preferences.c" />
+    <ClCompile Include="code\q3_ui\ui_qmenu.c" />
+    <ClCompile Include="code\q3_ui\ui_removebots.c" />
+    <ClCompile Include="code\q3_ui\ui_saveconfig.c" />
+    <ClCompile Include="code\q3_ui\ui_serverinfo.c" />
+    <ClCompile Include="code\q3_ui\ui_servers2.c" />
+    <ClCompile Include="code\q3_ui\ui_setup.c" />
+    <ClCompile Include="code\q3_ui\ui_sound.c" />
+    <ClCompile Include="code\q3_ui\ui_sparena.c" />
+    <ClCompile Include="code\q3_ui\ui_specifyserver.c" />
+    <ClCompile Include="code\q3_ui\ui_splevel.c" />
+    <ClCompile Include="code\q3_ui\ui_sppostgame.c" />
+    <ClCompile Include="code\q3_ui\ui_spskill.c" />
+    <ClCompile Include="code\q3_ui\ui_startserver.c" />
+    <ClCompile Include="code\q3_ui\ui_team.c" />
+    <ClCompile Include="code\q3_ui\ui_teamorders.c" />
+    <ClCompile Include="code\q3_ui\ui_video.c" />
+    <ClCompile Include="code\qcommon\cm_load.c" />
+    <ClCompile Include="code\qcommon\cm_patch.c" />
+    <ClCompile Include="code\qcommon\cm_polylib.c" />
+    <ClCompile Include="code\qcommon\cm_test.c" />
+    <ClCompile Include="code\qcommon\cm_trace.c" />
+    <ClCompile Include="code\qcommon\cmd.c" />
+    <ClCompile Include="code\qcommon\common.c" />
+    <ClCompile Include="code\qcommon\cvar.c" />
+    <ClCompile Include="code\qcommon\files.c" />
+    <ClCompile Include="code\qcommon\huffman.c" />
+    <ClCompile Include="code\qcommon\ioapi.c" />
+    <ClCompile Include="code\qcommon\md4.c" />
+    <ClCompile Include="code\qcommon\md5.c" />
+    <ClCompile Include="code\qcommon\msg.c" />
+    <ClCompile Include="code\qcommon\net_chan.c" />
+    <ClCompile Include="code\qcommon\net_ip.c" />
+    <ClCompile Include="code\qcommon\puff.c" />
+    <ClCompile Include="code\qcommon\q_math.c" />
+    <ClCompile Include="code\qcommon\q_shared.c" />
+    <ClCompile Include="code\qcommon\unzip.c" />
+    <ClCompile Include="code\qcommon\vm.c" />
+    <ClCompile Include="code\qcommon\vm_interpreted.c" />
+    <ClCompile Include="code\qcommon\vm_x86.c" />
+    <ClCompile Include="code\renderercommon\tr_font.c" />
+    <ClCompile Include="code\renderercommon\tr_image_bmp.c" />
+    <ClCompile Include="code\renderercommon\tr_image_jpg.c" />
+    <ClCompile Include="code\renderercommon\tr_image_pcx.c" />
+    <ClCompile Include="code\renderercommon\tr_image_png.c" />
+    <ClCompile Include="code\renderercommon\tr_image_tga.c" />
+    <ClCompile Include="code\renderercommon\tr_noise.c" />
+    <ClCompile Include="code\renderergl1\tr_animation.c" />
+    <ClCompile Include="code\renderergl1\tr_backend.c" />
+    <ClCompile Include="code\renderergl1\tr_bsp.c" />
+    <ClCompile Include="code\renderergl1\tr_cmds.c" />
+    <ClCompile Include="code\renderergl1\tr_curve.c" />
+    <ClCompile Include="code\renderergl1\tr_flares.c" />
+    <ClCompile Include="code\renderergl1\tr_image.c" />
+    <ClCompile Include="code\renderergl1\tr_init.c" />
+    <ClCompile Include="code\renderergl1\tr_light.c" />
+    <ClCompile Include="code\renderergl1\tr_main.c" />
+    <ClCompile Include="code\renderergl1\tr_marks.c" />
+    <ClCompile Include="code\renderergl1\tr_mesh.c" />
+    <ClCompile Include="code\renderergl1\tr_model.c" />
+    <ClCompile Include="code\renderergl1\tr_model_iqm.c" />
+    <ClCompile Include="code\renderergl1\tr_scene.c" />
+    <ClCompile Include="code\renderergl1\tr_shade.c" />
+    <ClCompile Include="code\renderergl1\tr_shade_calc.c" />
+    <ClCompile Include="code\renderergl1\tr_shader.c" />
+    <ClCompile Include="code\renderergl1\tr_shadows.c" />
+    <ClCompile Include="code\renderergl1\tr_sky.c" />
+    <ClCompile Include="code\renderergl1\tr_subs.c" />
+    <ClCompile Include="code\renderergl1\tr_surface.c" />
+    <ClCompile Include="code\renderergl1\tr_world.c" />
+    <ClCompile Include="code\sdl\sdl_gamma.c" />
+    <ClCompile Include="code\sdl\sdl_glimp.c" />
+    <ClCompile Include="code\sdl\sdl_input.c" />
+    <ClCompile Include="code\sdl\sdl_snd.c" />
+    <ClCompile Include="code\server\sv_bot.c" />
+    <ClCompile Include="code\server\sv_ccmds.c" />
+    <ClCompile Include="code\server\sv_client.c" />
+    <ClCompile Include="code\server\sv_debug_server.c" />
+    <ClCompile Include="code\server\sv_game.c" />
+    <ClCompile Include="code\server\sv_game_sp.c" />
+    <ClCompile Include="code\server\sv_init.c" />
+    <ClCompile Include="code\server\sv_main.c" />
+    <ClCompile Include="code\server\sv_net_chan.c" />
+    <ClCompile Include="code\server\sv_snapshot.c" />
+    <ClCompile Include="code\server\sv_world.c" />
+    <ClCompile Include="code\sys\con_log.c" />
+    <ClCompile Include="code\sys\con_passive.c" />
+    <ClCompile Include="code\sys\sys_main.c" />
+    <ClCompile Include="code\sys\sys_win32.c" />
+    <ClCompile Include="code\ui\ui_syscalls.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="code\botlib\aasfile.h" />
+    <ClInclude Include="code\botlib\be_aas.h" />
+    <ClInclude Include="code\botlib\be_aas_bsp.h" />
+    <ClInclude Include="code\botlib\be_aas_cluster.h" />
+    <ClInclude Include="code\botlib\be_aas_debug.h" />
+    <ClInclude Include="code\botlib\be_aas_def.h" />
+    <ClInclude Include="code\botlib\be_aas_entity.h" />
+    <ClInclude Include="code\botlib\be_aas_file.h" />
+    <ClInclude Include="code\botlib\be_aas_funcs.h" />
+    <ClInclude Include="code\botlib\be_aas_main.h" />
+    <ClInclude Include="code\botlib\be_aas_move.h" />
+    <ClInclude Include="code\botlib\be_aas_optimize.h" />
+    <ClInclude Include="code\botlib\be_aas_reach.h" />
+    <ClInclude Include="code\botlib\be_aas_route.h" />
+    <ClInclude Include="code\botlib\be_aas_routealt.h" />
+    <ClInclude Include="code\botlib\be_aas_sample.h" />
+    <ClInclude Include="code\botlib\be_ai_char.h" />
+    <ClInclude Include="code\botlib\be_ai_chat.h" />
+    <ClInclude Include="code\botlib\be_ai_gen.h" />
+    <ClInclude Include="code\botlib\be_ai_goal.h" />
+    <ClInclude Include="code\botlib\be_ai_move.h" />
+    <ClInclude Include="code\botlib\be_ai_weap.h" />
+    <ClInclude Include="code\botlib\be_ai_weight.h" />
+    <ClInclude Include="code\botlib\be_ea.h" />
+    <ClInclude Include="code\botlib\be_interface.h" />
+    <ClInclude Include="code\botlib\botlib.h" />
+    <ClInclude Include="code\botlib\l_crc.h" />
+    <ClInclude Include="code\botlib\l_libvar.h" />
+    <ClInclude Include="code\botlib\l_log.h" />
+    <ClInclude Include="code\botlib\l_memory.h" />
+    <ClInclude Include="code\botlib\l_precomp.h" />
+    <ClInclude Include="code\botlib\l_script.h" />
+    <ClInclude Include="code\botlib\l_struct.h" />
+    <ClInclude Include="code\botlib\l_utils.h" />
+    <ClInclude Include="code\cgame\cg_local.h" />
+    <ClInclude Include="code\cgame\cg_public.h" />
+    <ClInclude Include="code\client\cl_curl.h" />
+    <ClInclude Include="code\client\client.h" />
+    <ClInclude Include="code\client\keycodes.h" />
+    <ClInclude Include="code\client\keys.h" />
+    <ClInclude Include="code\client\libmumblelink.h" />
+    <ClInclude Include="code\client\qal.h" />
+    <ClInclude Include="code\client\snd_codec.h" />
+    <ClInclude Include="code\client\snd_local.h" />
+    <ClInclude Include="code\client\snd_public.h" />
+    <ClInclude Include="code\game\ai_chat.h" />
+    <ClInclude Include="code\game\ai_cmd.h" />
+    <ClInclude Include="code\game\ai_dmnet.h" />
+    <ClInclude Include="code\game\ai_dmq3.h" />
+    <ClInclude Include="code\game\ai_main.h" />
+    <ClInclude Include="code\game\ai_team.h" />
+    <ClInclude Include="code\game\ai_vcmd.h" />
+    <ClInclude Include="code\game\bg_lib.h" />
+    <ClInclude Include="code\game\bg_local.h" />
+    <ClInclude Include="code\game\bg_public.h" />
+    <ClInclude Include="code\game\chars.h" />
+    <ClInclude Include="code\game\g_local.h" />
+    <ClInclude Include="code\game\g_public.h" />
+    <ClInclude Include="code\game\g_rankings.h" />
+    <ClInclude Include="code\game\g_team.h" />
+    <ClInclude Include="code\game\inv.h" />
+    <ClInclude Include="code\game\match.h" />
+    <ClInclude Include="code\game\syn.h" />
+    <ClInclude Include="code\q3_ui\ui_local.h" />
+    <ClInclude Include="code\qcommon\cm_local.h" />
+    <ClInclude Include="code\qcommon\cm_patch.h" />
+    <ClInclude Include="code\qcommon\cm_polylib.h" />
+    <ClInclude Include="code\qcommon\cm_public.h" />
+    <ClInclude Include="code\qcommon\ioapi.h" />
+    <ClInclude Include="code\qcommon\json.h" />
+    <ClInclude Include="code\qcommon\puff.h" />
+    <ClInclude Include="code\qcommon\q_platform.h" />
+    <ClInclude Include="code\qcommon\q_shared.h" />
+    <ClInclude Include="code\qcommon\qcommon.h" />
+    <ClInclude Include="code\qcommon\qfiles.h" />
+    <ClInclude Include="code\qcommon\sp_types.h" />
+    <ClInclude Include="code\qcommon\surfaceflags.h" />
+    <ClInclude Include="code\qcommon\unzip.h" />
+    <ClInclude Include="code\qcommon\vm_local.h" />
+    <ClInclude Include="code\qcommon\vm_powerpc_asm.h" />
+    <ClInclude Include="code\qcommon\vm_sparc.h" />
+    <ClInclude Include="code\renderercommon\iqm.h" />
+    <ClInclude Include="code\renderercommon\qgl.h" />
+    <ClInclude Include="code\renderercommon\tr_common.h" />
+    <ClInclude Include="code\renderercommon\tr_public.h" />
+    <ClInclude Include="code\renderercommon\tr_types.h" />
+    <ClInclude Include="code\renderergl1\tr_local.h" />
+    <ClInclude Include="code\sdl\sdl_icon.h" />
+    <ClInclude Include="code\server\server.h" />
+    <ClInclude Include="code\sys\sys_loadlib.h" />
+    <ClInclude Include="code\sys\sys_local.h" />
+    <ClInclude Include="code\sys\win_resource.h" />
+    <ClInclude Include="code\ui\ui_local.h" />
+    <ClInclude Include="code\ui\ui_public.h" />
+    <ClInclude Include="code\ui\ui_shared.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="code\cgame\cg_newdraw.c" />
+    <None Include="code\game\g_rankings.c" />
+    <None Include="code\null\mac_net.c" />
+    <None Include="code\null\null_client.c" />
+    <None Include="code\null\null_glimp.c" />
+    <None Include="code\null\null_input.c" />
+    <None Include="code\null\null_main.c" />
+    <None Include="code\null\null_net.c" />
+    <None Include="code\null\null_snddma.c" />
+    <None Include="code\q3_ui\ui_login.c" />
+    <None Include="code\q3_ui\ui_rankings.c" />
+    <None Include="code\q3_ui\ui_rankstatus.c" />
+    <None Include="code\q3_ui\ui_signup.c" />
+    <None Include="code\q3_ui\ui_specifyleague.c" />
+    <None Include="code\q3_ui\ui_spreset.c" />
+    <None Include="code\qcommon\vm_none.c" />
+    <None Include="code\qcommon\vm_powerpc.c" />
+    <None Include="code\qcommon\vm_powerpc_asm.c" />
+    <None Include="code\qcommon\vm_sparc.c" />
+    <None Include="code\renderergl2\tr_animation.c" />
+    <None Include="code\renderergl2\tr_backend.c" />
+    <None Include="code\renderergl2\tr_bsp.c" />
+    <None Include="code\renderergl2\tr_cmds.c" />
+    <None Include="code\renderergl2\tr_curve.c" />
+    <None Include="code\renderergl2\tr_dsa.c" />
+    <None Include="code\renderergl2\tr_extensions.c" />
+    <None Include="code\renderergl2\tr_extramath.c" />
+    <None Include="code\renderergl2\tr_fbo.c" />
+    <None Include="code\renderergl2\tr_flares.c" />
+    <None Include="code\renderergl2\tr_glsl.c" />
+    <None Include="code\renderergl2\tr_image.c" />
+    <None Include="code\renderergl2\tr_image_dds.c" />
+    <None Include="code\renderergl2\tr_init.c" />
+    <None Include="code\renderergl2\tr_light.c" />
+    <None Include="code\renderergl2\tr_main.c" />
+    <None Include="code\renderergl2\tr_marks.c" />
+    <None Include="code\renderergl2\tr_mesh.c" />
+    <None Include="code\renderergl2\tr_model.c" />
+    <None Include="code\renderergl2\tr_model_iqm.c" />
+    <None Include="code\renderergl2\tr_postprocess.c" />
+    <None Include="code\renderergl2\tr_scene.c" />
+    <None Include="code\renderergl2\tr_shade.c" />
+    <None Include="code\renderergl2\tr_shade_calc.c" />
+    <None Include="code\renderergl2\tr_shader.c" />
+    <None Include="code\renderergl2\tr_shadows.c" />
+    <None Include="code\renderergl2\tr_sky.c" />
+    <None Include="code\renderergl2\tr_subs.c" />
+    <None Include="code\renderergl2\tr_surface.c" />
+    <None Include="code\renderergl2\tr_vbo.c" />
+    <None Include="code\renderergl2\tr_world.c" />
+    <None Include="code\server\sv_rankings.c" />
+    <None Include="code\sys\con_tty.c" />
+    <None Include="code\sys\con_win32.c" />
+    <None Include="code\sys\sys_unix.c" />
+    <None Include="code\ui\ui_atoms.c" />
+    <None Include="code\ui\ui_gameinfo.c" />
+    <None Include="code\ui\ui_main.c" />
+    <None Include="code\ui\ui_players.c" />
+    <None Include="code\ui\ui_shared.c" />
+    <None Include="code\vr\VrCvars.c" />
+    <None Include="code\vr\VrInputCommon.c" />
+    <None Include="code\vr\android\EFXR_AndroidGlue.c" />
+    <None Include="code\vr\android\EFXR_SurfaceView.c" />
+    <None Include="code\vr\android\OpenXrInput.c" />
+    <None Include="code\vr\android\TBXR_Common.c" />
+    <None Include="code\vr\android\android_crash.c" />
+    <None Include="code\vr\android\android_glimp.c" />
+    <None Include="code\vr\android\snd_opensles.c" />
+    <None Include="code\vr\windows\EFXR_SurfaceView.c" />
+    <None Include="code\vr\windows\OpenXrInput.c" />
+    <None Include="code\vr\windows\TBXR_Common.c" />
+    <None Include="code\renderergl2\tr_dsa.h" />
+    <None Include="code\renderergl2\tr_extramath.h" />
+    <None Include="code\renderergl2\tr_extratypes.h" />
+    <None Include="code\renderergl2\tr_fbo.h" />
+    <None Include="code\renderergl2\tr_local.h" />
+    <None Include="code\renderergl2\tr_postprocess.h" />
+    <None Include="code\vr\VrBase.h" />
+    <None Include="code\vr\VrClientInfo.h" />
+    <None Include="code\vr\VrCommon.h" />
+    <None Include="code\vr\VrCvars.h" />
+    <None Include="code\vr\android\TBXR_Common.h" />
+    <None Include="code\vr\openxr\openxr.h" />
+    <None Include="code\vr\openxr\openxr_helpers.h" />
+    <None Include="code\vr\openxr\openxr_loader_negotiation.h" />
+    <None Include="code\vr\openxr\openxr_platform.h" />
+    <None Include="code\vr\openxr\openxr_platform_defines.h" />
+    <None Include="code\vr\openxr\openxr_reflection.h" />
+    <None Include="code\vr\openxr\openxr_reflection_parent_structs.h" />
+    <None Include="code\vr\openxr\openxr_reflection_structs.h" />
+    <None Include="code\vr\openxr\xr_linear.h" />
+    <None Include="code\vr\windows\TBXR_Common.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
