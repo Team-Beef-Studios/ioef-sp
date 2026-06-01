@@ -892,6 +892,21 @@ static void IN_ProcessEvents( void )
 							width = e.window.data1;
 							height = e.window.data2;
 
+#ifdef BUILD_VR
+							// In VR the window is the desktop MIRROR, decoupled from
+							// the per-eye render resolution.  The mirror blit re-reads
+							// the window size every frame, so a resize needs nothing
+							// here -- and we must NOT touch r_customwidth/height/r_mode
+							// or schedule a vid_restart, which would resize the eye
+							// buffers and destroy the GL context the OpenXR session is
+							// bound to (headset goes blank).
+							{
+								extern qboolean VR_IsActive( void );
+								if( VR_IsActive() )
+									break;
+							}
+#endif
+
 							// check if size actually changed
 							if( cls.glconfig.vidWidth == width && cls.glconfig.vidHeight == height )
 							{

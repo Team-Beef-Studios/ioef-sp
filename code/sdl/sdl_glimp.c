@@ -52,6 +52,10 @@ cvar_t *r_allowSoftwareGL; // Don't abort out if a hardware visual can't be obta
 cvar_t *r_allowResize; // make window resizable
 cvar_t *r_centerWindow;
 cvar_t *r_sdlDriver;
+#ifdef BUILD_VR
+cvar_t *vr_mirror_width;  // PCVR desktop-mirror window width  (independent of the per-eye render res)
+cvar_t *vr_mirror_height; // PCVR desktop-mirror window height (the eye is cropped to this aspect)
+#endif
 
 void (APIENTRYP qglActiveTextureARB) (GLenum texture);
 void (APIENTRYP qglClientActiveTextureARB) (GLenum texture);
@@ -325,6 +329,34 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder)
 	// The desktop window size starts equal to the render resolution...
 	winW = glConfig.vidWidth;
 	winH = glConfig.vidHeight;
+
+#ifdef BUILD_VR
+	// VR desktop MIRROR: the per-eye render resolution (glConfig) is ~square and
+	// usually larger than the desktop, so leaving winW/winH at it gives a big
+	// square mirror window.  The eye is blitted/scaled into the window every frame
+	// (independent of the eye FBOs -- see ovrFramebuffer_Resolve), so the mirror
+	// window can be any size/aspect.  Size it to a normal widescreen via
+	// vr_mirror_width/height (default 1920x1080); the cap below shrinks it to fit
+	// the desktop while preserving that aspect, and ovrFramebuffer_Resolve crops
+	// the square eye to match so there is no distortion.  Detect VR by an active
+	// session or the per-eye res exceeding the desktop (same signal the cap uses).
+	{
+		qboolean inVR = ( ri.VR_IsActive && ri.VR_IsActive() ) ||
+		                ( desktopMode.h > 0 &&
+		                  ( winW > desktopMode.w || winH > desktopMode.h ) );
+		if ( !fullscreen && inVR && vr_mirror_width && vr_mirror_height )
+		{
+			if ( vr_mirror_width->integer > 0 && vr_mirror_height->integer > 0 )
+			{
+				winW = vr_mirror_width->integer;
+				winH = vr_mirror_height->integer;
+				// Let the user drag the mirror; the resize handler is VR-guarded
+				// (sdl_input.c) so the blit just re-scales -- no renderer restart.
+				flags |= SDL_WINDOW_RESIZABLE;
+			}
+		}
+	}
+#endif
 
 	// ...but in VR the render resolution is the per-eye texture size, which is
 	// normally LARGER than the desktop (e.g. 2275x2433 vs a 1707x1067 screen).
@@ -811,6 +843,11 @@ void GLimp_Init( void )
 	r_sdlDriver = ri.Cvar_Get( "r_sdlDriver", "", CVAR_ROM );
 	r_allowResize = ri.Cvar_Get( "r_allowResize", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_centerWindow = ri.Cvar_Get( "r_centerWindow", "0", CVAR_ARCHIVE | CVAR_LATCH );
+#ifdef BUILD_VR
+	// PCVR desktop-mirror window size, decoupled from the per-eye render res.
+	vr_mirror_width  = ri.Cvar_Get( "vr_mirror_width",  "1920", CVAR_ARCHIVE | CVAR_LATCH );
+	vr_mirror_height = ri.Cvar_Get( "vr_mirror_height", "1080", CVAR_ARCHIVE | CVAR_LATCH );
+#endif
 
 	if( ri.Cvar_VariableIntegerValue( "com_abnormalExit" ) )
 	{

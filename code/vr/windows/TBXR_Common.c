@@ -230,14 +230,41 @@ void ovrFramebuffer_SetNone() {
 void ovrFramebuffer_Resolve(ovrFramebuffer* frameBuffer) {
 
 	int width, height;
-	EFXR_GetScreenResolution(&width, &height);
+	EFXR_GetScreenResolution(&width, &height);	// desktop mirror window (blit DEST)
 
 	// Per-eye blit of the resolved eye FBO to the mirror window.  JKXR blits
 	// directly from FrameBuffers[index] (GL_TEXTURE_2D, single layer) rather
 	// than via the layered-texture helper FBO the multiview path required.
+	//
+	// CROP-TO-FILL: the eye texture is ~square but the mirror window is widescreen
+	// (vr_mirror_width/height).  Blitting the whole eye into the whole window would
+	// stretch it.  Instead take a centred sub-rect of the eye whose aspect matches
+	// the window, so the desktop mirror fills edge-to-edge with no bars and no
+	// distortion (the eye's top/bottom or sides are trimmed off).
+	int eyeW = (int)gAppState.Width;
+	int eyeH = (int)gAppState.Height;
+	int srcX = 0, srcY = 0, srcW = eyeW, srcH = eyeH;
+	if (width > 0 && height > 0 && eyeW > 0 && eyeH > 0)
+	{
+		float winAspect = (float)width / (float)height;
+		float eyeAspect = (float)eyeW / (float)eyeH;
+		if (winAspect > eyeAspect)
+		{
+			// Window wider than the eye -> use full width, crop top/bottom.
+			srcH = (int)((float)eyeW / winAspect + 0.5f);
+			srcY = (eyeH - srcH) / 2;
+		}
+		else
+		{
+			// Window taller/narrower than the eye -> use full height, crop sides.
+			srcW = (int)((float)eyeH * winAspect + 0.5f);
+			srcX = (eyeW - srcW) / 2;
+		}
+	}
+
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, frameBuffer->FrameBuffers[frameBuffer->TextureSwapChainIndex]);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-	glBlitFramebuffer(0, 0, gAppState.Width, gAppState.Height,
+	glBlitFramebuffer(srcX, srcY, srcX + srcW, srcY + srcH,
 		0, 0, width, height,
 		GL_COLOR_BUFFER_BIT, GL_NEAREST);
 }
