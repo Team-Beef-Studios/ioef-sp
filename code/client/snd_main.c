@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 cvar_t *s_volume;
 cvar_t *s_muted;
 cvar_t *s_musicVolume;
+cvar_t *s_volumeVoice;	// EF: separate volume for dialogue (CHAN_VOICE / CHAN_VOICE_ATTEN)
 cvar_t *s_doppler;
 cvar_t *s_backend;
 cvar_t *s_muteWhenMinimized;
@@ -487,6 +488,9 @@ void S_Init( void )
 
 	s_volume = Cvar_Get( "s_volume", "0.8", CVAR_ARCHIVE );
 	s_musicVolume = Cvar_Get( "s_musicvolume", "0.25", CVAR_ARCHIVE );
+	// EF voice/dialogue volume.  Scales CHAN_VOICE (and SP's CHAN_VOICE_ATTEN)
+	// in both sound backends; the SP UI "Voice Volume" slider drives it.
+	s_volumeVoice = Cvar_Get( "s_volumeVoice", "1", CVAR_ARCHIVE );
 	s_muted = Cvar_Get("s_muted", "0", CVAR_ROM);
 	s_doppler = Cvar_Get( "s_doppler", "1", CVAR_ARCHIVE );
 	s_backend = Cvar_Get( "s_backend", "", CVAR_ROM );

@@ -825,6 +825,22 @@ void S_AL_SrcShutdown( void )
 
 /*
 =================
+S_AL_VoiceGain
+
+EF dialogue volume: CHAN_VOICE and SP's CHAN_VOICE_ATTEN (==CHAN_ITEM) are the
+voice channels; scale them by s_volumeVoice so the "Voice Volume" slider works.
+Default 1.0 => no change.
+=================
+*/
+static float S_AL_VoiceGain( int channel )
+{
+	if( s_volumeVoice && ( channel == CHAN_VOICE || channel == CHAN_ITEM ) )
+		return s_volumeVoice->value;
+	return 1.0f;
+}
+
+/*
+=================
 S_AL_SrcSetup
 =================
 */
@@ -846,7 +862,7 @@ static void S_AL_SrcSetup(srcHandle_t src, sfxHandle_t sfx, alSrcPriority_t prio
 	curSource->isLooping = qfalse;
 	curSource->isTracking = qfalse;
 	curSource->isStream = qfalse;
-	curSource->curGain = s_alGain->value * s_volume->value;
+	curSource->curGain = s_alGain->value * s_volume->value * S_AL_VoiceGain( channel );
 	curSource->scaleGain = curSource->curGain;
 	curSource->local = local;
 
@@ -1496,8 +1512,8 @@ void S_AL_SrcUpdate( void )
 			continue;
 
 		// Update source parameters
-		if((s_alGain->modified) || (s_volume->modified))
-			curSource->curGain = s_alGain->value * s_volume->value;
+		if((s_alGain->modified) || (s_volume->modified) || (s_volumeVoice->modified))
+			curSource->curGain = s_alGain->value * s_volume->value * S_AL_VoiceGain( curSource->channel );
 		if((s_alRolloff->modified) && (!curSource->local))
 			qalSourcef(curSource->alSource, AL_ROLLOFF_FACTOR, s_alRolloff->value);
 		if(s_alMinDistance->modified)
@@ -2354,6 +2370,7 @@ void S_AL_Update( void )
 	// Clear the modified flags on the other cvars
 	s_alGain->modified = qfalse;
 	s_volume->modified = qfalse;
+	s_volumeVoice->modified = qfalse;
 	s_musicVolume->modified = qfalse;
 	s_alMinDistance->modified = qfalse;
 	s_alRolloff->modified = qfalse;

@@ -680,6 +680,13 @@ static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, s
 	}
 
 	ch->master_vol = 127;
+	// EF dialogue volume: CHAN_VOICE and SP's CHAN_VOICE_ATTEN (==CHAN_ITEM) are
+	// the voice channels; scale them by s_volumeVoice so the Voice Volume slider
+	// works.  (Spatialization derives left/right from master_vol, so this carries
+	// through.)  Default 1.0 => no change.
+	if ( s_volumeVoice && ( entchannel == CHAN_VOICE || entchannel == CHAN_ITEM ) ) {
+		ch->master_vol = (int)( ch->master_vol * s_volumeVoice->value );
+	}
 	ch->entnum = entityNum;
 	ch->thesfx = sfx;
 	ch->startSample = START_SAMPLE_IMMEDIATE;
