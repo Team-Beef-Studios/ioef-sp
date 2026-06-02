@@ -5,6 +5,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# MSYS-style path of this repo (e.g. /c/DEV/GitHub/Public/ioef-sp), baked into the
+# generated NMake build commands. Derived from the script's own location so the
+# project works on any machine/checkout; override with REPO_MSYS=... if needed.
+REPO_MSYS="${REPO_MSYS:-$(pwd)}"
+
 PROJ_GUID="{A1B2C3D4-E5F6-4789-ABCD-0123456789AB}"
 SLN_GUID="{B2C3D4E5-F6A7-489B-BCDE-123456789ABC}"
 NAME="ioef-sp"
@@ -66,13 +71,13 @@ nmake_props() {
   <PropertyGroup Condition="$cond">
     <NMakeBuildCommandLine>set MSYSTEM=$msys
 set MSYS2_PATH_TYPE=inherit
-$BASH -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make $target $flags -j8"</NMakeBuildCommandLine>
+$BASH -lc "cd '$REPO_MSYS' &amp;&amp; make $target $flags -j8"</NMakeBuildCommandLine>
     <NMakeReBuildCommandLine>set MSYSTEM=$msys
 set MSYS2_PATH_TYPE=inherit
-$BASH -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make $cleant $flags &amp;&amp; make $target $flags -j8"</NMakeReBuildCommandLine>
+$BASH -lc "cd '$REPO_MSYS' &amp;&amp; make $cleant $flags &amp;&amp; make $target $flags -j8"</NMakeReBuildCommandLine>
     <NMakeCleanCommandLine>set MSYSTEM=$msys
 set MSYS2_PATH_TYPE=inherit
-$BASH -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make $cleant $flags"</NMakeCleanCommandLine>
+$BASH -lc "cd '$REPO_MSYS' &amp;&amp; make $cleant $flags"</NMakeCleanCommandLine>
     <NMakeOutput>$out</NMakeOutput>
     <NMakePreprocessorDefinitions>$defs</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>$INCS</NMakeIncludeSearchPath>

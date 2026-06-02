@@ -4,6 +4,10 @@ Makefile.local
 *tags
 *~
 
+# Scratch build/run logs (engine + efgame consolidation work)
+/efbuild.log
+/efgame_*.log
+
 # OS X
 ####################
 .Spotlight-V100/

@@ -1,7 +1,9 @@
 # Building ioEF with Elite Force Singleplayer Support
 
-This document covers building the ioEF engine (with SP bridge code) and the
-Elite Force VR game DLLs from source on Windows.
+This document covers building the ioEF engine (this repo) and the Elite Force SP
+game/UI DLLs (the separate **Elite-Force-VR** repo) from source on Windows. The
+engine is built with MSYS2 MinGW (64-bit); the SP DLLs are built with Visual
+Studio and copied into the engine's `baseEF/`.
 
 ---
 
@@ -10,82 +12,81 @@ Elite Force VR game DLLs from source on Windows.
 For experienced developers who already have the toolchains installed:
 
 ```bash
-# 1. Engine (MSYS2 MINGW32 shell)
+# 1. Engine (MSYS2 MINGW64 shell)
 cd /c/DEV/GitHub/Public/ioef-sp          # or wherever the repo is
-make ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j$(nproc)        # release
-# or replace `make` with `make debug` for a debug build.
-# (See "Build the Engine" below for why these flags are needed.)
+make ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres USE_CODEC_MP3=1 -j4
+# add BUILD_VR=1 for the OpenXR VR engine; use `make debug ...` for a debug build.
 
-# 2. Game DLLs (VS Developer Command Prompt, or full path to MSBuild.exe)
+# 2. SP game DLLs (Visual Studio / MSBuild, from the Elite-Force-VR repo, x64)
 cd C:\DEV\GitHub\Public\Elite-Force-VR
-msbuild EF_SPMod.sln /p:Configuration=Release /p:Platform=x86 ^
+msbuild EF_SPMod.sln /p:Configuration=Release /p:Platform=x64 ^
         /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
 
-# 3. Deploy
-cp /c/DEV/GitHub/Public/Elite-Force-VR/Release/ef{game,ui}x86.dll \
-   build/release-mingw32-x86/baseEF/
+# 3. Deploy the DLLs into the engine's baseEF/
+cp /c/DEV/GitHub/Public/Elite-Force-VR/Release/ef{game,ui}x86_64.dll \
+   build/release-mingw64-x86_64/baseEF/
 
 # 4. Run
-cd build/release-mingw32-x86
-./ioquake3.x86.exe +set sp_game 1 +set r_fullscreen 0 +map borg1
+cd build/release-mingw64-x86_64
+./ioquake3.x86_64.exe +set sp_game 1 +set r_fullscreen 0 +map borg1
 ```
 
 ---
 
 ## Overview
 
-There are two components that must be built separately with different
-toolchains. Both produce **32-bit x86** binaries. The engine loads the SP game
-DLLs at runtime via `GetGameAPI` / `dllEntry` / `vmMain` exports.
+Two components, built with different toolchains; both produce **64-bit** binaries.
+The engine loads the SP game/UI DLLs at runtime via `GetGameAPI` / `dllEntry` /
+`vmMain` / `GetUIAPI` exports.
 
-| Component | Toolchain | Output |
-|-----------|-----------|--------|
-| **ioEF engine** | MSYS2 + MinGW (32-bit GCC) | `ioquake3.x86.exe`, `renderer_opengl1_x86.dll` |
-| **Elite Force VR SP DLLs** | Visual Studio 2017+ | `efgamex86.dll`, `efuix86.dll` |
+| Component | Toolchain / source | Output |
+|-----------|--------------------|--------|
+| **ioEF engine** | MSYS2 + MinGW, this repo (`code/`) | `ioquake3.x86_64.exe`, `renderer_opengl1_x86_64.dll` |
+| **Elite Force SP DLLs** | Visual Studio 2017+, the **Elite-Force-VR** repo | `efgamex86_64.dll`, `efuix86_64.dll` |
 
-> **Why two toolchains?** The ioEF engine inherits ioquake3's GNU Make build
-> system, which targets GCC/MinGW. The Elite Force VR game DLLs were developed
-> with Visual Studio and rely on MSVC-specific project files. Both produce
-> standard Win32 DLLs with C linkage, so they interoperate at runtime regardless
-> of which compiler built them.
+> **64-bit only.** The project targets `x86_64` exclusively — the OpenXR VR build
+> requires it and 32-bit is abandoned. The SP DLLs are built from the separate
+> Elite-Force-VR repository with MSVC; both produce standard Win64 DLLs with C
+> linkage, so they interoperate at runtime regardless of compiler. The Android
+> arm64 build compiles the same Elite-Force-VR source via ndk-build — see
+> `android/README.md`.
 
 ---
 
 ## Prerequisites
 
-### MSYS2 (for the engine)
+### MSYS2 (the only toolchain)
 
 1. Install MSYS2 from <https://www.msys2.org/>
-2. Open the **MSYS2 MINGW32** shell (not MINGW64 or MSYS).
-3. Install the 32-bit toolchain and dependencies:
+2. Open the **MSYS2 MINGW64** shell (not MINGW32 or MSYS).
+3. Install the 64-bit toolchain and dependencies:
 
 ```bash
 pacman -S --needed \
-  mingw-w64-i686-toolchain \
-  mingw-w64-i686-SDL2 \
-  mingw-w64-i686-openal \
-  mingw-w64-i686-curl \
+  mingw-w64-x86_64-toolchain \
+  mingw-w64-x86_64-SDL2 \
+  mingw-w64-x86_64-openal \
+  mingw-w64-x86_64-curl \
+  mingw-w64-x86_64-libmad \
   make git
 ```
 
-> The `mingw-w64-i686-toolchain` group provides the 32-bit `gcc` **and**
-> `windres` (from binutils), both of which the build needs.
+> The `mingw-w64-x86_64-toolchain` group provides `gcc` and `windres`. `libmad`
+> is needed for `USE_CODEC_MP3=1` (EF voice/dialogue is `.mp3`); copy `libmad.a`
+> into `code/libs/win64/` if the Makefile doesn't pick it up — see the engine notes.
 
-> **Important:** Use the MINGW32 shell so that `gcc` resolves to the i686
-> (32-bit) compiler. If you run from MINGW64, the Makefile detects `x86_64` and
-> builds a 64-bit binary that cannot load the 32-bit game DLLs. Even from a
-> MINGW32 shell, on some MSYS2 setups `uname -m` still reports `x86_64`; the
-> recommended `ARCH=x86 ... WINDRES=windres` flags (see below) make the build
-> robust against this.
+> **Important:** use the **MINGW64** shell so `gcc` resolves to the `x86_64`
+> compiler.
 
-### Visual Studio (for the game DLLs)
+### Visual Studio (for the SP game DLLs)
 
-- Visual Studio 2017 or later (2022 recommended).
-- The **Desktop development with C++** workload.
-- A platform toolset and Windows SDK. The projects ship targeting **v141 +
-  SDK 10.0.15063.0**; if you don't have those exact versions installed, either
-  retarget the solution in VS (right-click solution &rarr; *Retarget solution*)
-  or override at the command line with `/p:PlatformToolset=` and
+The Elite Force SP DLLs are built from the separate **Elite-Force-VR** repository
+with Visual Studio (that game source is C++ with MSVC project files):
+
+- Visual Studio 2017 or later (2022 recommended), with **Desktop development with C++**.
+- A platform toolset + Windows SDK. The projects ship targeting **v141 + SDK
+  10.0.15063.0**; if those aren't installed, retarget the solution in VS or
+  override at the command line with `/p:PlatformToolset=` and
   `/p:WindowsTargetPlatformVersion=` (see section 2). v143 + a current Win10/11
   SDK build cleanly.
 
@@ -93,50 +94,55 @@ pacman -S --needed \
 
 ## 1. Build the Engine
 
-From the **MSYS2 MINGW32** shell:
+From the **MSYS2 MINGW64** shell (this builds the **engine**; the SP DLLs are a
+separate Visual Studio build — see section 2):
 
 ```bash
 cd /c/DEV/GitHub/Public/ioef-sp          # or wherever the repo is
 
-# Release build (optimized) — produces the SP client ioquake3.x86.exe
-make ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j$(nproc)
+# Release build (optimized) — the engine
+make ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres USE_CODEC_MP3=1 -j4
 
 # --- OR --- Debug build (with symbols, no optimization): replace `make` with `make debug`
+# --- VR --- add BUILD_VR=1 to also build the OpenXR VR engine.
 ```
 
-Output goes to `build/release-mingw32-x86/` (or `build/debug-mingw32-x86/`).
+Output goes to `build/release-mingw64-x86_64/` (or `build/debug-mingw64-x86_64/`).
 
 #### Why these flags
 
 `BUILD_ELITEFORCE=1`, `BUILD_MISSIONPACK=0`, and `BUILD_SERVER=0` are **mandatory**
-for an EF SP build (they reflect the current state of the SP source). `ARCH`,
-`WINDRES`, and `BUILD_GAME_QVM` make the build reliable across MSYS2 setups; in
-an ideal MINGW32 shell those three are harmless no-ops.
+for an EF SP engine build. `ARCH=x86_64`, `WINDRES`, `BUILD_GAME_QVM`, and
+`USE_CODEC_MP3` round out a known-good invocation.
 
 | Flag | Reason |
 |------|--------|
 | `BUILD_ELITEFORCE=1` | **Required.** Defines `ELITEFORCE` and switches the game dir to `baseEF/` (version 1.38, `STEF1` master server). Without it the engine builds as stock ioquake3, looks in `baseq3/`, and aborts at startup with `"pak0.pk3" is missing`. |
 | `BUILD_MISSIONPACK=0` | Team Arena's `bg_misc.c` uses `entityState_t.generic1`, a field the EF `entityState_t` removed, so missionpack fails to compile under `ELITEFORCE`. EF doesn't use missionpack. |
 | `BUILD_SERVER=0` | The dedicated server (`ioq3ded`) fails to link: the SP bridge in `sv_game_sp.c` / `sv_init.c` references client-only functions (`CL_ShutdownCGame`, `CL_SP_GetStoredSaveComment`, `CL_SP_CopySaveScreenshot`). SP runs the client binary only. |
-| `ARCH=x86` | Forces a 32-bit build. On some MSYS2 installs `uname -m` reports `x86_64` even from the MINGW32 shell, so without this the Makefile builds 64-bit and fails with `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`. |
-| `WINDRES=windres` | Forcing `ARCH=x86` trips the Makefile's `CROSS_COMPILING` logic, which then looks for a prefixed `i686-w64-mingw32-windres` that the MINGW32 toolchain doesn't ship. Only plain `windres.exe` exists. Without this, the `.rc` resource compile silently fails (Error 127) and the final link aborts with `cannot find .../win_resource.o`. |
+| `ARCH=x86_64` | The project is 64-bit only (32-bit abandoned; the VR build requires x86_64). |
+| `WINDRES=windres` | Forcing `ARCH` trips the Makefile's `CROSS_COMPILING` logic, which then looks for a prefixed `x86_64-w64-mingw32-windres` that the MINGW64 toolchain doesn't ship. Only plain `windres.exe` exists. Without this, the `.rc` resource compile silently fails (Error 127) and the final link aborts with `cannot find .../win_resource.o`. |
 | `BUILD_GAME_QVM=0` | Skips QVM bytecode compilation, which fails on GCC 15+ (see the `constexpr` note under Troubleshooting) and is not needed for SP. |
+| `USE_CODEC_MP3=1` | EF voice/dialogue files are `.mp3`; without it all scripted speech is silent (needs libmad). |
 
 > **Gotcha:** Make does not track changes to command-line variables. If you
 > built once and then add/change a flag like `BUILD_ELITEFORCE=1`, the existing
 > `.o` files look up to date and make will *not* recompile them — you'll get a
-> stale binary. Run `make clean-release ARCH=x86` first (this only removes
+> stale binary. Run `make clean-release ARCH=x86_64` first (this only removes
 > object files and target binaries; it leaves `baseEF/` and its paks/DLLs
 > intact), then rebuild.
 
 ### Key files produced
 
 ```
-build/release-mingw32-x86/
-  ioquake3.x86.exe           # Main client executable
-  renderer_opengl1_x86.dll   # OpenGL renderer
-  SDL2.dll                    # SDL2 runtime (copied from toolchain)
-  baseEF/                     # Game data directory (populated separately)
+build/release-mingw64-x86_64/
+  ioquake3.x86_64.exe           # Main client executable
+  renderer_opengl1_x86_64.dll   # OpenGL renderer
+  SDL264.dll                    # SDL2 runtime (copied from toolchain)
+  baseEF/
+    efgamex86_64.dll            # SP game + cgame (from the Elite-Force-VR MSVC build)
+    efuix86_64.dll              # SP UI          (from the Elite-Force-VR MSVC build)
+    pak0.pk3 ...                # Game data (added separately, see below)
 ```
 
 ### Useful make variables
@@ -161,110 +167,152 @@ override variables without passing them on every command line.
 
 ### Cross-compiling from Linux
 
-If building on a Linux host targeting Windows:
+If building the engine on a Linux host targeting Windows:
 
 ```bash
-make PLATFORM=mingw32 ARCH=x86 \
-     CC=i686-w64-mingw32-gcc \
-     WINDRES=i686-w64-mingw32-windres \
+make PLATFORM=mingw32 ARCH=x86_64 \
+     CC=x86_64-w64-mingw32-gcc \
+     WINDRES=x86_64-w64-mingw32-windres \
      -j$(nproc)
 ```
 
+### Editing & building from Visual Studio (NMake project)
+
+The repo ships a Visual Studio **NMake (Makefile-type) project** so you can browse
+the engine source, get IntelliSense, and trigger builds from the IDE. It is **not**
+an MSVC build of the engine — it is a thin wrapper that shells out to the same
+MSYS2/MinGW `make` command documented above. The compiler, flags, and output are
+identical whether you build from the MINGW64 shell or from inside Visual Studio;
+**nothing about the MinGW build changes.** This is purely a convenience layer for
+people who prefer the IDE for editing and debugging.
+
+Files (generated; checked in):
+
+| File | Role |
+|------|------|
+| `ioef-sp.sln` | Solution to open in Visual Studio. |
+| `ioef-sp.vcxproj` | NMake project — its `NMakeBuildCommandLine` etc. invoke `make` via `C:\msys64\usr\bin\bash.exe`. |
+| `ioef-sp.vcxproj.filters` | Source-tree folder layout for the Solution Explorer. |
+| `gen_vs_project.sh` | Regenerates the three files above (re-run after adding/removing source files). |
+
+**Prerequisites:** the same MSYS2/MinGW toolchain as the command-line build,
+installed at `C:\msys64` (the path is baked into the project's build commands),
+plus Visual Studio 2022 with the **Desktop development with C++** workload (for the
+IDE, IntelliSense, and the NMake project system). The engine is still compiled by
+MinGW `gcc`, not MSVC.
+
+> **Repo path is auto-derived.** The IDE build commands `cd` into the repo via an
+> MSYS path baked into the project. `gen_vs_project.sh` derives this from its own
+> location (`pwd`), so the generated `ioef-sp.vcxproj` is correct for whatever
+> machine/checkout ran the script — **no manual path editing.** If your checkout
+> differs from the committed project's path, just re-run `./gen_vs_project.sh` (see
+> below) and the path is regenerated. To force a specific path, set
+> `REPO_MSYS=/c/your/path ./gen_vs_project.sh`. The build also requires MSYS2 at
+> `C:\msys64` (the `bash.exe` path is fixed in the project).
+
+**Use the x64 configurations only.** The project defines `Debug|x64`, `Release|x64`,
+`Debug|Win32`, and `Release|Win32`, but **32-bit is abandoned** — only the **x64**
+configurations are supported. Ignore (or delete) the Win32 ones.
+
+**Build-flag parity.** The NMake command lines use
+`ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres`
+but **omit `USE_CODEC_MP3=1` and `BUILD_VR=1`**. A build driven from the IDE as-is
+therefore has **no MP3 voice/dialogue and no VR** — fine for quick engine edits,
+but not equal to the canonical build above. To match it, add those flags to the
+`make` invocations (edit `gen_vs_project.sh` and regenerate, or edit
+`ioef-sp.vcxproj` directly).
+
+**IntelliSense classification.** `gen_vs_project.sh` reads the `.d` dependency files
+under `build/` to decide which sources are actually compiled on Windows; those
+become `<ClCompile>` (IntelliSense on) and everything else (Android/Unix/GL2/null
+stubs) is listed as `<None>` (browsable, IntelliSense off, so VS doesn't error on
+missing platform headers like `jni.h`). **Run a command-line build first**, then
+regenerate, so the classification is accurate:
+
+```bash
+# from the MSYS2 MINGW64 shell, after at least one successful make:
+./gen_vs_project.sh
+```
+
+> The SP **game/cgame/UI** code is not part of this project — it lives in the
+> separate Elite-Force-VR repo and has its own MSVC solution (`EF_SPMod.sln`, see
+> section 2). This NMake project covers the **engine** only.
+
 ---
 
-## 2. Build the Game DLLs
+## 2. Build the SP Game DLLs (Visual Studio, from the Elite-Force-VR repo)
 
-### Using Visual Studio GUI
-
-1. Open `C:\DEV\GitHub\Public\Elite-Force-VR\EF_SPMod.sln` in Visual Studio.
-2. Set the solution configuration to **Release** and platform to **x86**.
-3. If prompted that the toolset/SDK (v141 / SDK 10.0.15063.0) is missing,
-   right-click the solution &rarr; *Retarget solution* and pick an installed
-   toolset (e.g. v143) and SDK.
-4. Build the solution (Ctrl+Shift+B) or build each project individually:
-   - `game` &rarr; produces `Release/efgamex86.dll`
-   - `ui` &rarr; produces `Release/efuix86.dll`
-
-### Using the command line
-
-From a **Developer Command Prompt for VS** (or invoke `MSBuild.exe` by full
-path). The solution platform is named **x86** (it maps to `Win32` internally),
-so pass `/p:Platform=x86`:
+The Elite Force SP game/cgame/UI source is **not** in this repo — it lives in the
+separate **Elite-Force-VR** repository and is built with Visual Studio (MSVC),
+**64-bit**. Open `EF_SPMod.sln` in VS (Release / x64), or build from a Developer
+Command Prompt:
 
 ```cmd
 cd C:\DEV\GitHub\Public\Elite-Force-VR
-
-msbuild EF_SPMod.sln /p:Configuration=Release /p:Platform=x86 /m
-
-:: If the shipped toolset/SDK is not installed, retarget on the command line
-:: (non-persistent; leaves the .vcxproj files unchanged):
-msbuild EF_SPMod.sln /p:Configuration=Release /p:Platform=x86 ^
+msbuild EF_SPMod.sln /p:Configuration=Release /p:Platform=x64 /m
+:: If the shipped toolset/SDK (v141 / SDK 10.0.15063.0) isn't installed, override:
+msbuild EF_SPMod.sln /p:Configuration=Release /p:Platform=x64 ^
         /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
 ```
 
-> The full path to MSBuild for VS 2022 Community is
-> `C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe`.
+Output → `Elite-Force-VR/Release/efgamex86_64.dll` (SP server game + cgame, via
+`GetGameAPI` / `dllEntry` / `vmMain`) and `efuix86_64.dll` (SP UI, via `GetUIAPI`).
+Copy both into the engine's `baseEF/` (see section 3). Elite-Force-VR has git
+submodules under `speedrun/` — run `git submodule update --init --recursive`
+after a fresh clone.
 
-### Output
-
-```
-Elite-Force-VR/Release/
-  efgamex86.dll    # SP game module (contains both game + cgame code)
-  efgamex86.pdb    # Debug symbols
-  efuix86.dll      # SP UI module
-  efuix86.pdb      # Debug symbols
-```
+> The Android arm64 build compiles the same Elite-Force-VR source via its own
+> ndk-build path (`android/jni/EFGame/`, sibling checkout) — see `android/README.md`.
 
 ---
 
 ## 3. Set Up Game Data
 
-The engine needs the original Elite Force game data (`.pk3` files) and the
-freshly built DLLs in a `baseEF/` directory.
+The engine needs the original Elite Force game data (`.pk3` files) in `baseEF/`,
+plus the SP DLLs from section 2.
 
 ### Directory layout
 
 ```
-build/release-mingw32-x86/
-  ioquake3.x86.exe
-  renderer_opengl1_x86.dll
-  SDL2.dll
-  libgcc_s_dw2-1.dll      # mingw32 GCC runtime — renderer DLL depends on it
-  libwinpthread-1.dll     # mingw32 runtime (copy alongside)
-  libstdc++-6.dll         # mingw32 runtime (copy alongside)
+build/release-mingw64-x86_64/
+  ioquake3.x86_64.exe
+  renderer_opengl1_x86_64.dll
+  SDL264.dll
+  libgcc_s_seh-1.dll      # mingw64 GCC runtime — renderer DLL depends on it
+  libwinpthread-1.dll     # mingw64 runtime (copy alongside)
+  libstdc++-6.dll         # mingw64 runtime (copy alongside)
   baseEF/
     pak0.pk3               # From the original EF1 game disc/install
-    pak1.pk3               # (optional) Patch data
-    efgamex86.dll          # From Elite-Force-VR/Release/
-    efuix86.dll            # From Elite-Force-VR/Release/
+    pak1.pk3 ...           # (optional) Patch data
+    efgamex86_64.dll       # From Elite-Force-VR/Release/ (section 2)
+    efuix86_64.dll         # From Elite-Force-VR/Release/ (section 2)
 ```
 
-### Copying the mingw32 runtime DLLs
+### Copying the mingw64 runtime DLLs
 
-`ioquake3.x86.exe` is statically linked, but `renderer_opengl1_x86.dll` imports
-`libgcc_s_dw2-1.dll`. Without it next to the exe, the renderer fails to load
+`ioquake3.x86_64.exe` is statically linked, but `renderer_opengl1_x86_64.dll` imports
+`libgcc_s_seh-1.dll`. Without it next to the exe, the renderer fails to load
 with `The specified module could not be found` and the engine aborts at
-`Initializing Renderer`. Copy the runtime DLLs from the MINGW32 toolchain:
+`Initializing Renderer`. Copy the runtime DLLs from the MINGW64 toolchain:
 
 ```bash
-BUILDDIR="build/release-mingw32-x86"
-cp /c/msys64/mingw32/bin/libgcc_s_dw2-1.dll  "$BUILDDIR/"
-cp /c/msys64/mingw32/bin/libwinpthread-1.dll "$BUILDDIR/"
-cp /c/msys64/mingw32/bin/libstdc++-6.dll     "$BUILDDIR/"
+BUILDDIR="build/release-mingw64-x86_64"
+cp /c/msys64/mingw64/bin/libgcc_s_seh-1.dll  "$BUILDDIR/"
+cp /c/msys64/mingw64/bin/libwinpthread-1.dll "$BUILDDIR/"
+cp /c/msys64/mingw64/bin/libstdc++-6.dll     "$BUILDDIR/"
 ```
 
 ### Copying game data
 
 ```bash
 # From the MSYS2 shell:
-BUILDDIR="build/release-mingw32-x86/baseEF"
+BUILDDIR="build/release-mingw64-x86_64/baseEF"
 
 # Copy original EF1 pak files (adjust source path as needed)
 cp "/c/Program Files (x86)/GOG Galaxy/Games/Star Trek Elite Force/baseEF/"*.pk3 "$BUILDDIR/"
 
-# Copy built SP DLLs
-cp /c/DEV/GitHub/Public/Elite-Force-VR/Release/efgamex86.dll "$BUILDDIR/"
-cp /c/DEV/GitHub/Public/Elite-Force-VR/Release/efuix86.dll   "$BUILDDIR/"
+# Copy the SP DLLs from the Elite-Force-VR build (section 2)
+cp /c/DEV/GitHub/Public/Elite-Force-VR/Release/ef{game,ui}x86_64.dll "$BUILDDIR/"
 ```
 
 ---
@@ -274,16 +322,16 @@ cp /c/DEV/GitHub/Public/Elite-Force-VR/Release/efuix86.dll   "$BUILDDIR/"
 ### Singleplayer mode
 
 ```bash
-cd build/release-mingw32-x86
+cd build/release-mingw64-x86_64
 
 # Launch the borg1 map in SP mode (windowed)
-./ioquake3.x86.exe +set r_fullscreen 0 +set sp_game 1 +map borg1
+./ioquake3.x86_64.exe +set r_fullscreen 0 +set sp_game 1 +map borg1
 
 # With logging enabled (writes qconsole.log to baseEF/)
-./ioquake3.x86.exe +set r_fullscreen 0 +set sp_game 1 +set logfile 2 +map borg1
+./ioquake3.x86_64.exe +set r_fullscreen 0 +set sp_game 1 +set logfile 2 +map borg1
 
 # Suppress the safe-mode dialog (useful for automated/headless launches)
-./ioquake3.x86.exe +set r_fullscreen 0 +set sp_game 1 +set com_skipSafeDialog 1 +map borg1
+./ioquake3.x86_64.exe +set r_fullscreen 0 +set sp_game 1 +set com_skipSafeDialog 1 +map borg1
 ```
 
 Key launch cvars:
@@ -300,7 +348,7 @@ Key launch cvars:
 ### Multiplayer mode (standard ioEF)
 
 ```bash
-./ioquake3.x86.exe +set r_fullscreen 0
+./ioquake3.x86_64.exe +set r_fullscreen 0
 ```
 
 ---
@@ -310,10 +358,10 @@ Key launch cvars:
 ### GDB
 
 ```bash
-cd build/release-mingw32-x86
+cd build/release-mingw64-x86_64
 
 # Build with debug symbols first (make debug)
-gdb ./ioquake3.x86.exe
+gdb ./ioquake3.x86_64.exe
 
 # In GDB:
 (gdb) set args +set r_fullscreen 0 +set sp_game 1 +set logfile 2 +map borg1
@@ -322,10 +370,11 @@ gdb ./ioquake3.x86.exe
 
 ### Debug symbols for game DLLs
 
-The `.pdb` files from the Elite-Force-VR Release build contain full debug
-symbols. Place them next to the DLLs in `baseEF/` for Visual Studio's debugger
-or WinDbg to pick up. For GDB, the DWARF info is embedded in the DLL if built
-with the Debug configuration.
+Build the SP DLLs in Elite-Force-VR with the **Debug** configuration to get
+symbols. The MSVC `.pdb` files (next to the DLLs in `Elite-Force-VR/Release/` or
+`Debug/`) are picked up by Visual Studio's debugger / WinDbg; place them beside
+the DLLs in `baseEF/`. For GDB, build the engine with `make debug` for engine-side
+symbols (the MSVC-built game DLLs won't symbolicate under GDB).
 
 ### Console log
 
@@ -378,9 +427,9 @@ See `mcp/package.json` for available scripts.
 
 | File | Role |
 |------|------|
-| `code/server/sv_game_sp.c` | Server-side bridge: loads `efgamex86.dll` via `GetGameAPI`, maintains a shadow entity array, translates between SP `gentity_t` and engine `sharedEntity_t` |
+| `code/server/sv_game_sp.c` | Server-side bridge: loads `efgamex86_64.dll` via `GetGameAPI`, maintains a shadow entity array, translates between SP `gentity_t` and engine `sharedEntity_t` |
 | `code/client/cl_cgame_sp.c` | Cgame syscall dispatcher: 71 SP syscalls with different numbering from MP's ~50, plus snapshot builder |
-| `code/client/cl_ui_sp.c` | UI bridge: loads `efuix86.dll` via `GetUIAPI`, provides save-game helpers |
+| `code/client/cl_ui_sp.c` | UI bridge: loads `efuix86_64.dll` via `GetUIAPI`, provides save-game helpers |
 | `code/qcommon/sp_types.h` | Shared SP struct definitions (`sp_entityState_t`, `sp_playerState_t`, etc.) |
 | `code/qcommon/vm.c` | Fake VM support (`isFake` flag for bridge VMs that are not real QVMs) |
 
@@ -400,7 +449,7 @@ See `mcp/package.json` for available scripts.
 
 The `sp_game` cvar triggers an alternate code path:
 
-1. **Server side** (`sv_game_sp.c`): Loads `efgamex86.dll`, calls its
+1. **Server side** (`sv_game_sp.c`): Loads `efgamex86_64.dll`, calls its
    `GetGameAPI` export to exchange function pointer tables (Q2-style API).
    A shadow entity array translates between the SP game's `gentity_t` layout
    and the engine's `sharedEntity_t`.
@@ -410,7 +459,7 @@ The `sp_game` cvar triggers an alternate code path:
    DLL. Translates SP cgame syscall numbers (which differ from MP) to engine
    functions.
 
-3. **Client UI** (`cl_ui_sp.c`): Loads `efuix86.dll` and calls its
+3. **Client UI** (`cl_ui_sp.c`): Loads `efuix86_64.dll` and calls its
    `GetUIAPI` export for the SP menu system.
 
 ### Key differences from MP
@@ -420,7 +469,7 @@ The `sp_game` cvar triggers an alternate code path:
   `entityState_t` (extra fields for phaser recharge, lean, scale, Borg
   adaptation, etc.).
 - The SP cgame has 71 syscalls with different numbering from MP's ~50.
-- The single `efgamex86.dll` contains both server-side game logic (via
+- The single `efgamex86_64.dll` contains both server-side game logic (via
   `GetGameAPI`) and client-side cgame rendering (via `dllEntry`/`vmMain`).
 
 ---
@@ -435,13 +484,13 @@ The `sp_game` cvar triggers an alternate code path:
 being a reserved keyword.
 
 **Cause:** GCC 15 added `constexpr` as a C23 keyword (the issue persists on
-GCC 16, the current MSYS2 i686 toolchain). The LCC tool (QVM compiler) uses
+GCC 16, the current MSYS2 x86_64 toolchain). The LCC tool (QVM compiler) uses
 `constexpr` as an identifier in its own source code.
 
 **Fix:** Disable QVM building, which is not needed for SP development:
 
 ```bash
-make ARCH=x86 BUILD_ELITEFORCE=1 WINDRES=windres -j$(nproc) BUILD_GAME_QVM=0
+make ARCH=x86_64 BUILD_ELITEFORCE=1 WINDRES=windres -j4 BUILD_GAME_QVM=0
 ```
 
 #### JPEG struct redefinition / type mismatch
@@ -455,7 +504,7 @@ development package is installed alongside the bundled copy.
 
 **Fix:** The engine uses its bundled JPEG library by default. Ensure you are
 not passing extra `-I` include paths that pull in system JPEG headers. If
-you have `mingw-w64-i686-libjpeg-turbo` installed, consider removing it or
+you have `mingw-w64-x86_64-libjpeg-turbo` installed, consider removing it or
 setting `USE_INTERNAL_JPEG=1` explicitly.
 
 #### glconfig_t size check assertion
@@ -480,22 +529,22 @@ whether to reset settings, which blocks headless or automated launches.
 **Fix:** Pass `+set com_skipSafeDialog 1` on the command line:
 
 ```bash
-./ioquake3.x86.exe +set sp_game 1 +set r_fullscreen 0 +set com_skipSafeDialog 1 +map borg1
+./ioquake3.x86_64.exe +set sp_game 1 +set r_fullscreen 0 +set com_skipSafeDialog 1 +map borg1
 ```
 
 ### Runtime errors
 
 | Problem | Solution |
 |---------|----------|
-| `"pak0.pk3" is missing ... baseq3 directory` | The engine was built **without** `BUILD_ELITEFORCE=1`, so it's looking in `baseq3/` instead of `baseEF/`. Rebuild with `BUILD_ELITEFORCE=1` (run `make clean-release ARCH=x86` first — see the gotcha under "Build the Engine"). |
+| `"pak0.pk3" is missing ... baseq3 directory` | The engine was built **without** `BUILD_ELITEFORCE=1`, so it's looking in `baseq3/` instead of `baseEF/`. Rebuild with `BUILD_ELITEFORCE=1` (run `make clean-release ARCH=x86_64` first — see the gotcha under "Build the Engine"). |
 | Compile error: `entityState_t ... has no member named 'generic1'` | A missionpack source file under `ELITEFORCE`. Add `BUILD_MISSIONPACK=0`. |
 | Link error: undefined reference to `CL_ShutdownCGame` / `CL_SP_GetStoredSaveComment` / `CL_SP_CopySaveScreenshot` | The dedicated-server link pulling in client-only SP bridge symbols. Add `BUILD_SERVER=0` (SP uses the client binary only). |
-| `failed to load efgamex86.dll` | Ensure the DLL is in `baseEF/` and is 32-bit. |
+| `failed to load efgamex86_64.dll` | Ensure the DLL (from the Elite-Force-VR x64 build) is in `baseEF/` and is 64-bit. |
 | `Unpure client detected` | Should be auto-fixed by SP mode setting `sv_pure 0`. If not, add `+set sv_pure 0` to launch args. |
-| `GetGameAPI returned NULL` | DLL loaded but export not found. Check DLL was built from Elite-Force-VR source (needs `GetGameAPI` export). |
+| `GetGameAPI returned NULL` | DLL loaded but export not found. Check it was built from Elite-Force-VR source (needs the `GetGameAPI` export) for the matching arch. |
 | `game API version mismatch` | DLL API version doesn't match expected version 6. Rebuild DLLs. |
-| Engine builds as 64-bit (`64-bit mode not compiled in`) | Use the MSYS2 MINGW32 shell, not MINGW64. If `uname -m` still reports `x86_64`, set `ARCH=x86` explicitly. |
-| Link fails: `cannot find .../win_resource.o` | The `windres` resource compile failed (often Error 127). Pass `WINDRES=windres` so it uses the unprefixed binary instead of a missing `i686-w64-mingw32-windres`. |
+| `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in` | You're in the 32-bit MINGW32 shell. Use the MSYS2 **MINGW64** shell (the project is 64-bit only). |
+| Link fails: `cannot find .../win_resource.o` | The `windres` resource compile failed (often Error 127). Pass `WINDRES=windres` so it uses the unprefixed binary instead of a missing `x86_64-w64-mingw32-windres`. |
 | `uname: command not found` | Run `make` from MSYS2 shell, not PowerShell or cmd. The Makefile requires Unix utilities. |
-| Missing `SDL2.dll` | Install `mingw-w64-i686-SDL2` via pacman. The Makefile copies it to the build directory. |
-| Renderer fails to load: `The specified module could not be found` | `renderer_opengl1_x86.dll` needs `libgcc_s_dw2-1.dll` next to the exe. Copy the mingw32 runtime DLLs (see "Copying the mingw32 runtime DLLs"). |
+| Missing `SDL2.dll` | Install `mingw-w64-x86_64-SDL2` via pacman. The Makefile copies it to the build directory. |
+| Renderer fails to load: `The specified module could not be found` | `renderer_opengl1_x86_64.dll` needs `libgcc_s_seh-1.dll` next to the exe. Copy the mingw64 runtime DLLs (see "Copying the mingw64 runtime DLLs"). |
