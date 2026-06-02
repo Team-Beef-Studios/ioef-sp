@@ -1057,6 +1057,29 @@ static void CL_SP_InitUIImport( void ) {
 
 /*
 ===============
+CL_SP_GenericMenu_f
+
+Handles the "genericmenu <id>" console command the SP game emits to bring up an
+in-world interface -- e.g. target_interface_use does
+gi.SendConsoleCommand("genericmenu turbolift") when you use a turbolift, and the
+holodeck/transporter/astrometrics/etc. panels do the same with their own id.
+
+The SP UI exposes a string-based UI_SetActiveMenu(menuname, menuID); for these
+panels menuname is "genericmenu" and menuID is the interface id, which the UI
+dispatches (ui_atoms.cpp UI_SetActiveMenu -> UI_TurboliftMenu, etc.).  The engine
+never registered this command, so the game's request fell through the console
+dispatch to the server and the menu never appeared.
+===============
+*/
+static void CL_SP_GenericMenu_f( void ) {
+	if ( !ue ) {
+		return;
+	}
+	ue->UI_SetActiveMenu( "genericmenu", Cmd_Argv( 1 ) );
+}
+
+/*
+===============
 CL_SP_InitUI
 
 Loads the EF1 singleplayer UI DLL (efuix86.dll), calls GetUIAPI to get the
@@ -1134,6 +1157,11 @@ void CL_SP_InitUI( void ) {
 		Com_Error( ERR_FATAL, "CL_SP_InitUI: GetUIAPI returned NULL" );
 	}
 
+	// The SP game brings up in-world interfaces by sending "genericmenu <id>" to
+	// the console (e.g. the turbolift deck-select panel).  Register the handler so
+	// it routes to the UI's UI_SetActiveMenu instead of falling through unhandled.
+	Cmd_AddCommand( "genericmenu", CL_SP_GenericMenu_f );
+
 	// Don't call UI_Init here; CL_InitUI() will call it via VM_Call(UI_INIT)
 	// which dispatches through CL_SP_UIVmMain.
 	Com_Printf( "SP UI module loaded successfully\n" );
@@ -1147,6 +1175,8 @@ Calls the UI module's Shutdown function and unloads the DLL.
 ===============
 */
 void CL_SP_ShutdownUI( void ) {
+	Cmd_RemoveCommand( "genericmenu" );
+
 	if ( ue ) {
 		ue->UI_Shutdown();
 		ue = NULL;

@@ -449,6 +449,8 @@ static SavedGameJustLoaded_e sv_sp_savedGameJustLoaded;  // Current load type fo
 static SavedGameJustLoaded_e sv_sp_pendingLoadType;      // Load type for a pending save restore
 static char sv_sp_pendingLoadQPath[MAX_QPATH];    // Qpath of save file to load after map restart
 static char sv_sp_pendingLoadMap[MAX_QPATH];      // Map name from pending save file
+static char sv_sp_pendingSpawnTarget[MAX_QPATH];  // Spawn target for a pending map/load transition
+static qboolean sv_sp_pendingLoadTransition;      // qbLoadTransition for the next Init (hub/deck transition)
 
 extern const byte *CL_SP_GetStoredSaveComment( void );
 extern qboolean CL_SP_CopySaveScreenshot( byte *outRGBA, int outSize );
@@ -2374,6 +2376,43 @@ void SV_SP_SaveCgameSyscall( intptr_t (*syscall)( intptr_t, ... ) ) {
 }
 
 /*
+===============
+SV_SP_Transition_f
+
+Handles the EF "loadtransition <map> [target]" and "maptransition <map> [target]"
+console commands.  The SP game requests these via gi.SendConsoleCommand
+(G_ChangeMap) for in-world level/deck changes -- e.g. using a turbolift runs
+"use tour_turbo_NN", whose script issues "loadtransition tour/deckNN [target]".
+
+We load the target map and carry the spawn target + the qbLoadTransition flag
+through to the game's Init (SV_SP_InitGameVM): "loadtransition" is for hub/connected
+maps (decks) where client data is kept on the server; "maptransition" is for a new
+level.  Without this handler the command fell through the console dispatch to the
+server and was dropped, so the lift never moved.
+
+NOTE: carrying the player's inventory/health across the transition additionally
+requires the engine to populate the "playersave"/"playerammo*" cvars the game reads
+in Player_RestoreFromPrevLevel(); that carry-over is not yet implemented here, so
+the destination map spawns with default loadout for now.
+===============
+*/
+static void SV_SP_Transition_f( void ) {
+	char mapname[MAX_QPATH];
+
+	if ( Cmd_Argc() < 2 ) {
+		Com_Printf( "usage: %s <map> [spawntarget]\n", Cmd_Argv( 0 ) );
+		return;
+	}
+
+	Q_strncpyz( mapname, Cmd_Argv( 1 ), sizeof( mapname ) );
+	Q_strncpyz( sv_sp_pendingSpawnTarget, Cmd_Argv( 2 ), sizeof( sv_sp_pendingSpawnTarget ) );
+	sv_sp_pendingLoadTransition = ( Q_stricmp( Cmd_Argv( 0 ), "loadtransition" ) == 0 );
+
+	// Load the map; SV_SP_InitGameVM consumes the pending spawn target + flag.
+	Cbuf_ExecuteText( EXEC_APPEND, va( "spmap %s\n", mapname ) );
+}
+
+/*
  * SP game DLL filename is arch-derived: ARCH_STRING is "x86" for a 32-bit build,
  * "x86_64" for 64-bit (and whatever it resolves to on other arches).  This must
  * match the DLL project's TargetName ("efgame" + ARCH_STRING).  Keeping it derived
@@ -2473,6 +2512,13 @@ void SV_SP_InitGameProgs( void ) {
 	}
 
 	Com_Printf( "SP game module loaded successfully (API version %d)\n", ge->apiversion );
+
+	// In-world level/deck transitions the game requests by console command.  The
+	// DLL stays loaded across map transitions, so register these once here.
+	Cmd_RemoveCommand( "loadtransition" );
+	Cmd_RemoveCommand( "maptransition" );
+	Cmd_AddCommand( "loadtransition", SV_SP_Transition_f );
+	Cmd_AddCommand( "maptransition", SV_SP_Transition_f );
 }
 
 /*
@@ -2483,6 +2529,9 @@ Calls the game module's Shutdown function and unloads the DLL.
 ===============
 */
 void SV_SP_ShutdownGameProgs( void ) {
+	Cmd_RemoveCommand( "loadtransition" );
+	Cmd_RemoveCommand( "maptransition" );
+
 	SV_SP_CloseSaveStream( &sv_sp_saveWrite );
 	SV_SP_CloseSaveStream( &sv_sp_saveRead );
 
@@ -2577,7 +2626,10 @@ void SV_SP_InitGameVM( void ) {
 	// Resolve load type BEFORE the map-name check (was previously read
 	// before assignment -- undefined behaviour).
 	loadType = ( sv_sp_pendingLoadType != eNO ) ? sv_sp_pendingLoadType : eNO;
-	loadTransition = qfalse;
+	// A pending loadtransition/maptransition (e.g. turbolift deck change) carries
+	// the spawn target + transition flag set by SV_SP_Transition_f.  Empty/false
+	// for a normal map load.
+	loadTransition = sv_sp_pendingLoadTransition;
 
 	if ( loadType != eNO && Q_stricmp( sv_sp_pendingLoadMap, mapname ) ) {
 		Com_Error( ERR_DROP, "SV_SP_InitGameVM: savegame map '%s' does not match loaded map '%s'",
@@ -2593,15 +2645,19 @@ void SV_SP_InitGameVM( void ) {
 	Q_strncpyz( loadQPath, sv_sp_pendingLoadQPath, sizeof( loadQPath ) );
 
 	// Initialize the game module
-	ge->Init( mapname,				// mapname
-			  "",					// spawntarget
-			  sv.checksumFeed,		// checkSum
-			  entstring,			// entstring
-			  sv.time,				// levelTime
-			  rand(),				// randomSeed
-			  Com_Milliseconds(),	// globalTime
-			  loadType,				// eSavedGameJustLoaded
-			  loadTransition );		// qbLoadTransition
+	ge->Init( mapname,					// mapname
+			  sv_sp_pendingSpawnTarget,	// spawntarget (set by a pending transition)
+			  sv.checksumFeed,			// checkSum
+			  entstring,				// entstring
+			  sv.time,					// levelTime
+			  rand(),					// randomSeed
+			  Com_Milliseconds(),		// globalTime
+			  loadType,					// eSavedGameJustLoaded
+			  loadTransition );			// qbLoadTransition
+
+	// The pending transition has now been consumed by Init.
+	sv_sp_pendingSpawnTarget[0] = '\0';
+	sv_sp_pendingLoadTransition = qfalse;
 
 	if ( loadType != eNO && !SV_SP_LoadPendingSave() ) {
 		Com_Error( ERR_DROP, "SV_SP_InitGameVM: failed to load savegame %s", loadQPath );
