@@ -585,9 +585,9 @@ void Console_Key (int key) {
 
 	// enter finishes the line
 	if ( key == K_ENTER || key == K_KP_ENTER ) {
-		// if not in the game explicitly prepend a slash if needed
-		if ( clc.state != CA_ACTIVE &&
-				g_consoleField.buffer[0] &&
+		// explicitly prepend a slash if needed, so console input is always
+		// treated as a command (use the messagemode key or "say" for chat)
+		if ( g_consoleField.buffer[0] &&
 				g_consoleField.buffer[0] != '\\' &&
 				g_consoleField.buffer[0] != '/' ) {
 			char	temp[MAX_EDIT_LINE-1];

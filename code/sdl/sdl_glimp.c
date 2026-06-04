@@ -51,6 +51,7 @@ static SDL_GLContext SDL_glContext = NULL;
 cvar_t *r_allowSoftwareGL; // Don't abort out if a hardware visual can't be obtained
 cvar_t *r_allowResize; // make window resizable
 cvar_t *r_centerWindow;
+cvar_t *r_fullscreenDesktop; // borderless fullscreen at the desktop resolution (fills the whole screen)
 cvar_t *r_sdlDriver;
 #ifdef BUILD_VR
 cvar_t *vr_mirror_width;  // PCVR desktop-mirror window width  (independent of the per-eye render res)
@@ -232,6 +233,7 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder)
 	int display = 0;
 	int x = SDL_WINDOWPOS_UNDEFINED, y = SDL_WINDOWPOS_UNDEFINED;
 	int winW = 0, winH = 0;	// desktop window size (may be capped below glConfig in VR)
+	qboolean fullscreenDesktop = qfalse;	// borderless fullscreen at the desktop resolution
 
 	ri.Printf( PRINT_ALL, "Initializing OpenGL display\n");
 
@@ -277,6 +279,21 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder)
 				"Cannot determine display aspect, assuming 1.333\n" );
 	}
 
+	// Borderless desktop fullscreen: use SDL_WINDOW_FULLSCREEN_DESKTOP so the image
+	// always fills the whole screen.  The default exclusive SDL_WINDOW_FULLSCREEN
+	// switches to an r_mode video mode (default r_mode 3 == 640x480), which the panel
+	// then scales/letterboxes -- the "doesn't fill the screen" symptom.  Needs a valid
+	// desktop mode to size from.
+	//
+	// In VR the desktop window is only a MIRROR: the headset renders from the per-eye
+	// textures (glConfig, normally LARGER than the desktop), so we must NOT pull glConfig
+	// down to the desktop resolution -- that corrupts the per-eye / XR-swapchain render
+	// size (headset goes wrong-res).  The mirror window itself should still be
+	// FULLSCREEN_DESKTOP so it fills the monitor; ovrFramebuffer_Resolve crops the square
+	// eye to the window.  So the FULLSCREEN_DESKTOP *flag* applies in both modes, but the
+	// desktop-resolution *override* below is gated to flat mode (vr_enable 0).
+	fullscreenDesktop = ( fullscreen && r_fullscreenDesktop->integer && desktopMode.h > 0 );
+
 	// Flat-screen safety net (left unconditional -- like the VR mirror-window cap
 	// below -- because sdl_glimp.c builds into the renderer, which is NOT compiled
 	// with -DBUILD_VR; the runtime vr_enable check is the real gate).  A VR session
@@ -301,9 +318,9 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder)
 
 	ri.Printf (PRINT_ALL, "...setting mode %d:", mode );
 
-	if (mode == -2)
+	if (mode == -2 || ( fullscreenDesktop && !ri.Cvar_VariableIntegerValue( "vr_enable" ) ))
 	{
-		// use desktop video resolution
+		// use desktop video resolution (flat mode only -- in VR glConfig stays per-eye)
 		if( desktopMode.h > 0 )
 		{
 			glConfig.vidWidth = desktopMode.w;
@@ -405,7 +422,10 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder)
 
 	if( fullscreen )
 	{
-		flags |= SDL_WINDOW_FULLSCREEN;
+		if( fullscreenDesktop )
+			flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+		else
+			flags |= SDL_WINDOW_FULLSCREEN;
 		glConfig.isFullscreen = qtrue;
 	}
 	else
@@ -843,6 +863,7 @@ void GLimp_Init( void )
 	r_sdlDriver = ri.Cvar_Get( "r_sdlDriver", "", CVAR_ROM );
 	r_allowResize = ri.Cvar_Get( "r_allowResize", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_centerWindow = ri.Cvar_Get( "r_centerWindow", "0", CVAR_ARCHIVE | CVAR_LATCH );
+	r_fullscreenDesktop = ri.Cvar_Get( "r_fullscreenDesktop", "1", CVAR_ARCHIVE | CVAR_LATCH );
 #ifdef BUILD_VR
 	// PCVR desktop-mirror window size, decoupled from the per-eye render res.
 	vr_mirror_width  = ri.Cvar_Get( "vr_mirror_width",  "1920", CVAR_ARCHIVE | CVAR_LATCH );
@@ -955,7 +976,26 @@ void GLimp_EndFrame( void )
 
 		if( needToToggle )
 		{
-			sdlToggled = SDL_SetWindowFullscreen( SDL_window, r_fullscreen->integer ) >= 0;
+			// Flat borderless fullscreen changes the render resolution to the desktop
+			// size, so it can't be flipped live -- restart video to rebuild glConfig
+			// and the viewport.  In VR glConfig stays at the per-eye size (only the
+			// mirror window changes), so a restart is both unnecessary AND unsafe: it
+			// would tear down the GL context the OpenXR session is bound to (headset
+			// blanks).  There we just switch the window's fullscreen flag live.
+			if( r_fullscreenDesktop->integer && !ri.Cvar_VariableIntegerValue( "vr_enable" ) )
+			{
+				ri.Cmd_ExecuteText( EXEC_APPEND, "vid_restart\n" );
+				ri.IN_Restart( );
+				r_fullscreen->modified = qfalse;
+				return;
+			}
+
+			{
+				Uint32 fsFlag = r_fullscreenDesktop->integer ?
+				                SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_WINDOW_FULLSCREEN;
+				sdlToggled = SDL_SetWindowFullscreen( SDL_window,
+				                r_fullscreen->integer ? fsFlag : 0 ) >= 0;
+			}
 
 			// SDL_WM_ToggleFullScreen didn't work, so do it the slow way
 			if( !sdlToggled )

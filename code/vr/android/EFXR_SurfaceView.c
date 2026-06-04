@@ -320,6 +320,20 @@ qboolean VR_PreRendererInit()
 
 	if (vrPreInited)
 	{
+		// A renderer restart re-enters here (e.g. the video menu applying a
+		// resolution or fullscreen change runs vid_restart).  The menu will have
+		// overwritten r_mode / r_customwidth / r_customheight with the user's pick,
+		// which would make the renderer init at that size and squash the scene into
+		// the corner of each eye.  Re-assert the per-eye render resolution the first
+		// call computed (gAppState.Width/Height already hold the supersample-scaled
+		// size) so the headset is unaffected by menu video changes.  These are latched
+		// cvars, applied by the Cvar_Get in the R_Init that immediately follows.
+		if (gAppState.Instance != XR_NULL_HANDLE)
+		{
+			Cvar_Set("r_customwidth",  va("%d", (int)gAppState.Width));
+			Cvar_Set("r_customheight", va("%d", (int)gAppState.Height));
+			Cvar_Set("r_mode", "-1");
+		}
 		return (qboolean)(gAppState.Instance != XR_NULL_HANDLE);
 	}
 
