@@ -36,6 +36,14 @@ Optional `/sdcard/EFXR/commandline.txt`, e.g.:
 ```
 Saves go to `/sdcard/EFXR/baseEF/save/`.
 
+## Runtime rendering
+
+Immersive VR uses the shared PCVR/Android stereo replay path: the SP
+cgame/render frontend is built once per frame, then the captured renderer
+backend commands are replayed into both OpenXR eye buffers with per-eye
+projection and IPD. This is intended to reduce CPU/frontend work; it is not GL
+multiview and still draws each eye separately.
+
 ## Status
 - **M3a** (this): gradle/ndk scaffolding + engine `.so` build files + engine
   edits (`sys_loadlib.h` Android dlopen, `sys_main.c` `main()` guard).

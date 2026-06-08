@@ -149,7 +149,7 @@ VR projection / per-frame setup
 // of the OpenXR-provided asymmetric FOV -- not a full matrix.  Returns qfalse
 // when the VR projection should not be used (session not yet active, or a
 // non-immersive cinematic) so the engine falls back to the flat projection.
-qboolean VR_GetFovTangents(float *tanLeft, float *tanRight, float *tanUp, float *tanDown)
+qboolean VR_GetFovTangentsForEye(int eye, float *tanLeft, float *tanRight, float *tanUp, float *tanDown)
 {
 	XrFovf fov;
 
@@ -164,7 +164,23 @@ qboolean VR_GetFovTangents(float *tanLeft, float *tanRight, float *tanUp, float 
 		return qfalse;
 	}
 
-	fov = gAppState.Views[vr.eye].fov;
+	if (eye < 0)
+	{
+		XrFovf left = gAppState.Views[0].fov;
+		XrFovf right = gAppState.Views[1].fov;
+		*tanLeft  = fminf(tanf(left.angleLeft),  tanf(right.angleLeft));
+		*tanRight = fmaxf(tanf(left.angleRight), tanf(right.angleRight));
+		*tanUp    = fmaxf(tanf(left.angleUp),    tanf(right.angleUp));
+		*tanDown  = fminf(tanf(left.angleDown),  tanf(right.angleDown));
+		return qtrue;
+	}
+
+	if (eye > 1)
+	{
+		eye = vr.eye;
+	}
+
+	fov = gAppState.Views[eye].fov;
 
 	*tanLeft  = tanf(fov.angleLeft);   // negative
 	*tanRight = tanf(fov.angleRight);  // positive
@@ -174,13 +190,17 @@ qboolean VR_GetFovTangents(float *tanLeft, float *tanRight, float *tanUp, float 
 	return qtrue;
 }
 
+qboolean VR_GetFovTangents(float *tanLeft, float *tanRight, float *tanUp, float *tanDown)
+{
+	return VR_GetFovTangentsForEye(vr.eye, tanLeft, tanRight, tanUp, tanDown);
+}
+
 // Signed lateral eye offset (Quake units, + = along the view LEFT axis) for
 // stereo parallax.  Half the inter-pupillary distance taken from the actual
 // OpenXR eye poses, scaled to world units by vr_worldscale.  Eye 0 (left) shifts
-// left (+), eye 1 (right) shifts right (-).  The engine applies this along the
-// rendered refdef viewaxis[1] in SPCG_R_RENDERSCENE, so head roll is handled
-// automatically and per-eye display canting is covered by the asymmetric
-// projection.
+// left (+), eye 1 (right) shifts right (-).  The renderer applies this along
+// refdef viewaxis[1] during stereo replay, so head roll is handled automatically
+// and per-eye display canting is covered by the asymmetric projection.
 float VR_GetEyeStereoSeparation(int eye)
 {
 	XrVector3f *l, *r;

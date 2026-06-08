@@ -901,6 +901,9 @@ typedef struct {
 	model_t					*currentModel;
 
 	viewParms_t				viewParms;
+#ifdef BUILD_VR
+	qboolean				vrStereoReplayCapture;
+#endif
 
 	float					identityLight;		// 1.0 / ( 1 << overbrightBits )
 	int						identityLightByte;	// identityLight * 255
@@ -1088,6 +1091,8 @@ int R_CullPointAndRadius( vec3_t origin, float radius );
 int R_CullLocalPointAndRadius( vec3_t origin, float radius );
 
 void R_SetupProjection(viewParms_t *dest, float zProj, qboolean computeFrustum);
+void R_SetupProjectionZ(viewParms_t *dest);
+void R_RebuildViewParmsWorld(viewParms_t *parms);
 void R_RotateForEntity( const trRefEntity_t *ent, const viewParms_t *viewParms, orientationr_t *or );
 
 /*
@@ -1141,6 +1146,9 @@ void	RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 void	RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty);
 
 void		RE_BeginFrame( stereoFrame_t stereoFrame );
+qboolean	RE_VR_BeginStereoReplayCapture( void );
+qboolean	RE_VR_ReplayStereoFrame( stereoFrame_t stereoFrame, qboolean finalReplay );
+void		RE_VR_CancelStereoReplayCapture( void );
 void		RE_BeginRegistration( glconfig_t *glconfig );
 void		RE_LoadWorldMap( const char *mapname );
 void		RE_SetWorldVisData( const byte *vis );

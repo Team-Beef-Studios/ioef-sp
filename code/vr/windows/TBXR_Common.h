@@ -252,6 +252,7 @@ void VR_FrameSetup();
 qboolean VR_UseScreenLayer();
 float VR_GetScreenLayerDistance();
 qboolean VR_GetFovTangents(float *tanLeft, float *tanRight, float *tanUp, float *tanDown);
+qboolean VR_GetFovTangentsForEye(int eye, float *tanLeft, float *tanRight, float *tanUp, float *tanDown);
 void VR_HandleControllerInput();
 void VR_SetHMDOrientation(float pitch, float yaw, float roll );
 void VR_SetHMDPosition(float x, float y, float z );

@@ -323,6 +323,18 @@ void RE_RenderScene( const refdef_t *fd ) {
 	tr.refdef.time = fd->time;
 	tr.refdef.rdflags = fd->rdflags;
 
+#ifdef BUILD_VR
+	if ( ri.VR_IsActive && ri.VR_IsActive() &&
+	     !( tr.refdef.rdflags & RDF_NOWORLDMODEL ) &&
+	     tr.refdef.stereoFrame != STEREO_CENTER &&
+	     ri.VR_GetEyeStereoSeparation )
+	{
+		int eye = ( tr.refdef.stereoFrame == STEREO_LEFT ) ? 0 : 1;
+		float sep = ri.VR_GetEyeStereoSeparation( eye );
+		VectorMA( tr.refdef.vieworg, sep, tr.refdef.viewaxis[1], tr.refdef.vieworg );
+	}
+#endif
+
 	// copy the areamask data over and note if it has changed, which
 	// will force a reset of the visible leafs even if the view hasn't moved
 	tr.refdef.areamaskModified = qfalse;
@@ -394,12 +406,12 @@ void RE_RenderScene( const refdef_t *fd ) {
 	
 	parms.stereoFrame = tr.refdef.stereoFrame;
 
-	VectorCopy( fd->vieworg, parms.or.origin );
-	VectorCopy( fd->viewaxis[0], parms.or.axis[0] );
-	VectorCopy( fd->viewaxis[1], parms.or.axis[1] );
-	VectorCopy( fd->viewaxis[2], parms.or.axis[2] );
+	VectorCopy( tr.refdef.vieworg, parms.or.origin );
+	VectorCopy( tr.refdef.viewaxis[0], parms.or.axis[0] );
+	VectorCopy( tr.refdef.viewaxis[1], parms.or.axis[1] );
+	VectorCopy( tr.refdef.viewaxis[2], parms.or.axis[2] );
 
-	VectorCopy( fd->vieworg, parms.pvsOrigin );
+	VectorCopy( tr.refdef.vieworg, parms.pvsOrigin );
 
 	R_RenderView( &parms );
 

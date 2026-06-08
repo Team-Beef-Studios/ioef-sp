@@ -727,19 +727,6 @@ intptr_t CL_SPCgameSystemCalls( intptr_t *args ) {
 		re.AddLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5) );
 		return 0;
 	case SPCG_R_RENDERSCENE: {
-#ifdef BUILD_VR
-		// Stereo: shift the view origin laterally for the eye currently being
-		// rendered (vr.eye) so each eye sees from its own pupil -> IPD parallax.
-		// Skipped for the flat virtual-screen layer.  viewaxis[1] is the view
-		// LEFT axis, so this is correct under head roll too.
-		if ( VR_IsActive() && !VR_UseScreenLayer() ) {
-			refdef_t *fd = (refdef_t *)VMA(1);
-			float sep = VR_GetEyeStereoSeparation( vr.eye );
-			VectorMA( fd->vieworg, sep, fd->viewaxis[1], fd->vieworg );
-			// (6DoF vertical view height is applied in the cgame, floor-relative,
-			//  so it can use the player's feet position.)
-		}
-#endif
 		re.RenderScene( VMA(1) );
 		return 0;
 	}

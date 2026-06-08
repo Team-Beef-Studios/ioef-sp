@@ -3417,6 +3417,8 @@ void CL_InitRef( void ) {
 	ri.VR_IsActive = VR_IsActive;
 	ri.VR_UseScreenLayer = VR_UseScreenLayer;
 	ri.VR_GetFovTangents = VR_GetFovTangents;
+	ri.VR_GetFovTangentsForEye = VR_GetFovTangentsForEye;
+	ri.VR_GetEyeStereoSeparation = VR_GetEyeStereoSeparation;
 #endif
 
 	ret = GetRefAPI( REF_API_VERSION, &ri );

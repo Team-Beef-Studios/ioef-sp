@@ -345,6 +345,19 @@ Key launch cvars:
 | `com_skipSafeDialog` | 1 | Skip the safe-mode dialog on startup |
 | `r_mode` | -1 | Custom resolution (use with r_customwidth/height) |
 
+### Stereo Replay
+
+Immersive VR uses the shared PCVR/Android stereo replay path. The engine still
+uses the normal OpenXR per-eye swapchains, but the SP cgame and renderer frontend
+run once per frame with a union stereo frustum; the captured renderer commands
+are then replayed into the left and right eye buffers with per-eye projection and
+IPD.
+
+This is intended to reduce CPU/frontend work. It is not GL multiview and does
+not reduce GPU draw submission to a single eye-independent draw. The old
+immersive two-pass renderer has been removed; virtual-screen VR mode and flat
+non-VR rendering remain separate paths.
+
 ### Multiplayer mode (standard ioEF)
 
 ```bash

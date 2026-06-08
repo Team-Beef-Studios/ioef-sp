@@ -1399,6 +1399,9 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.TakeVideoFrame = RE_TakeVideoFrame;
 
 #ifdef BUILD_VR
+	re.VR_BeginStereoReplayCapture = RE_VR_BeginStereoReplayCapture;
+	re.VR_ReplayStereoFrame = RE_VR_ReplayStereoFrame;
+	re.VR_CancelStereoReplayCapture = RE_VR_CancelStereoReplayCapture;
 	re.WIN_SwapWindow = GLimp_SwapWindow;	// VR desktop-mirror present
 	re.WIN_GetDrawableSize = GLimp_GetDrawableSize;	// actual window pixel size for the mirror blit
 #endif

@@ -22,6 +22,9 @@ and adds:
 
 - **OpenXR stereoscopic rendering** — per-eye projection, 6DoF head tracking, a
   virtual screen for 2D menus and cinematics.
+- **Shared stereo replay path** - immersive VR builds the cgame/render frontend
+  once and replays the renderer backend into both eyes. This is shared by PC VR
+  and Android, and is not GL multiview.
 - **Motion-controller input** — thumbstick locomotion, snap/smooth turn, trigger
   fire, grip crouch, face-button jump/use, and a laser-pointer for menus.
 - **Two delivery targets:**
@@ -121,6 +124,12 @@ from the headset. See [`android/README.md`](android/README.md).
 
 A flat (non-VR) build runs by omitting `BUILD_VR=1` and `vr_enable` — useful for
 debugging gameplay without a headset.
+
+In immersive VR, the engine renders the SP cgame/frontend once per frame, then
+replays the captured renderer commands for the left and right OpenXR eye buffers.
+This reduces CPU/frontend work; it still draws each eye separately and is not a
+GL4ES/OpenGL multiview path. Virtual-screen menus/cinematics and flat non-VR
+rendering remain separate paths.
 
 ---
 

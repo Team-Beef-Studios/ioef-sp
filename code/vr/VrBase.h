@@ -34,6 +34,11 @@ qboolean VR_UseScreenLayer( void );
    are tan(angle): left/down are negative, right/up positive. */
 qboolean VR_GetFovTangents( float *tanLeft, float *tanRight, float *tanUp, float *tanDown );
 
+/* Same as VR_GetFovTangents, but for an explicit eye.  eye 0/1 returns that
+   eye's real OpenXR FOV; eye < 0 returns the union FOV used for single-pass
+   stereo-replay culling. */
+qboolean VR_GetFovTangentsForEye( int eye, float *tanLeft, float *tanRight, float *tanUp, float *tanDown );
+
 /* Signed lateral view-origin offset (in Quake units, along the view LEFT axis)
    for the given eye, giving stereo (IPD) parallax.  Derived from the actual
    OpenXR eye poses * vr_worldscale.  Apply along refdef viewaxis[1]. */

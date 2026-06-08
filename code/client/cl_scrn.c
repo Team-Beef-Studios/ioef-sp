@@ -612,11 +612,10 @@ void SCR_UpdateScreen( void ) {
 		if ( VR_IsActive() )
 		{
 			// OpenXR-driven frame.  TBXR_FrameSetup waits/begins the XR frame and
-			// updates the HMD pose; we then render each eye into its own XR
-			// swapchain image (two-pass, GL1) -- or the flat 2D image onto the
-			// virtual screen (quad layer) when VR_UseScreenLayer() is true --
-			// and submit to the compositor.  The desktop window swap is
-			// suppressed in GLimp_EndFrame while VR is active.
+			// updates the HMD pose. Immersive VR renders through the shared stereo
+			// replay path: build one cgame/frontend command stream, then replay it
+			// into each OpenXR eye buffer. Virtual-screen mode still draws the flat
+			// 2D image once onto the quad layer.
 			TBXR_FrameSetup();
 
 			if ( VR_UseScreenLayer() )
@@ -636,19 +635,47 @@ void SCR_UpdateScreen( void ) {
 			else
 			{
 				int eye;
-				for ( eye = 0; eye < 2; eye++ )
+
+				if ( skippingCin )
 				{
-					// Pass STEREO_LEFT/RIGHT so the cgame's CG_DrawActiveFrame can
-					// gate per-frame simulation correctly (it only advances time /
-					// effects when stereoView != STEREO_RIGHT) -- otherwise the
-					// right eye gets frametime 0 and frame-gated effects (beams,
-					// FX) render in the left eye only.  The renderer accepts these
-					// under VR (RE_BeginFrame); the actual eye target is the FBO
-					// bound by TBXR_prepareEyeBuffer (+ per-eye projection via vr.eye).
-					TBXR_prepareEyeBuffer( eye );
-					SCR_DrawScreenField( eye == 0 ? STEREO_LEFT : STEREO_RIGHT );
-					re.EndFrame( NULL, NULL );
-					TBXR_finishEyeBuffer( eye );
+					for ( eye = 0; eye < 2; eye++ )
+					{
+						TBXR_prepareEyeBuffer( eye );
+						re.BeginFrame( eye == 0 ? STEREO_LEFT : STEREO_RIGHT );
+						SCR_FillRect( 0, 0, 640, 480, colorBlack );
+						re.EndFrame( NULL, NULL );
+						TBXR_finishEyeBuffer( eye );
+					}
+				}
+				else
+				{
+					if ( !re.VR_BeginStereoReplayCapture || !re.VR_ReplayStereoFrame ||
+					     !re.VR_BeginStereoReplayCapture() )
+					{
+						Com_Error( ERR_DROP, "VR stereo replay capture is unavailable" );
+					}
+
+					// Build the cgame/frontend once with neutral HUD offsets; each
+					// XR eye replay below gets its real projection and IPD.
+					vr.eye = 0;
+					vr.off_center_fov_x[0] = vr.off_center_fov_x[1] = 0.0f;
+					vr.off_center_fov_y[0] = vr.off_center_fov_y[1] = 0.0f;
+
+					SCR_DrawScreenField( STEREO_CENTER );
+
+					for ( eye = 0; eye < 2; eye++ )
+					{
+						TBXR_prepareEyeBuffer( eye );
+						if ( !re.VR_ReplayStereoFrame( eye == 0 ? STEREO_LEFT : STEREO_RIGHT, eye == 1 ) )
+						{
+							if ( re.VR_CancelStereoReplayCapture )
+							{
+								re.VR_CancelStereoReplayCapture();
+							}
+							Com_Error( ERR_DROP, "VR stereo replay failed" );
+						}
+						TBXR_finishEyeBuffer( eye );
+					}
 				}
 			}
 

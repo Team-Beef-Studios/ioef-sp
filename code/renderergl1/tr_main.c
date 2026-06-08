@@ -36,6 +36,39 @@ static float	s_flipMatrix[16] = {
 	0, 0, 0, 1
 };
 
+void myGlMultMatrix( const float *a, const float *b, float *out );
+
+void R_RebuildViewParmsWorld(viewParms_t *parms)
+{
+	float	viewerMatrix[16];
+	vec3_t	origin;
+
+	VectorCopy( parms->or.origin, origin );
+
+	viewerMatrix[0] = parms->or.axis[0][0];
+	viewerMatrix[4] = parms->or.axis[0][1];
+	viewerMatrix[8] = parms->or.axis[0][2];
+	viewerMatrix[12] = -origin[0] * viewerMatrix[0] + -origin[1] * viewerMatrix[4] + -origin[2] * viewerMatrix[8];
+
+	viewerMatrix[1] = parms->or.axis[1][0];
+	viewerMatrix[5] = parms->or.axis[1][1];
+	viewerMatrix[9] = parms->or.axis[1][2];
+	viewerMatrix[13] = -origin[0] * viewerMatrix[1] + -origin[1] * viewerMatrix[5] + -origin[2] * viewerMatrix[9];
+
+	viewerMatrix[2] = parms->or.axis[2][0];
+	viewerMatrix[6] = parms->or.axis[2][1];
+	viewerMatrix[10] = parms->or.axis[2][2];
+	viewerMatrix[14] = -origin[0] * viewerMatrix[2] + -origin[1] * viewerMatrix[6] + -origin[2] * viewerMatrix[10];
+
+	viewerMatrix[3] = 0;
+	viewerMatrix[7] = 0;
+	viewerMatrix[11] = 0;
+	viewerMatrix[15] = 1;
+
+	parms->world = parms->or;
+	VectorCopy( parms->or.origin, parms->world.viewOrigin );
+	myGlMultMatrix( viewerMatrix, s_flipMatrix, parms->world.modelMatrix );
+}
 
 refimport_t	ri;
 
@@ -530,8 +563,33 @@ void R_SetupProjection(viewParms_t *dest, float zProj, qboolean computeFrustum)
 	if ( !(tr.refdef.rdflags & RDF_NOWORLDMODEL) )
 	{
 		float tanLeft, tanRight, tanUp, tanDown;
-		if ( ri.VR_GetFovTangents &&
-		     ri.VR_GetFovTangents( &tanLeft, &tanRight, &tanUp, &tanDown ) )
+		qboolean gotFov = qfalse;
+		if ( ri.VR_GetFovTangentsForEye )
+		{
+			int eye = -2;
+			if ( tr.vrStereoReplayCapture && dest->stereoFrame == STEREO_CENTER )
+			{
+				eye = -1;	// union FOV for binocular frontend culling
+			}
+			else if ( dest->stereoFrame == STEREO_LEFT )
+			{
+				eye = 0;
+			}
+			else if ( dest->stereoFrame == STEREO_RIGHT )
+			{
+				eye = 1;
+			}
+
+			if ( eye != -2 )
+			{
+				gotFov = ri.VR_GetFovTangentsForEye( eye, &tanLeft, &tanRight, &tanUp, &tanDown );
+			}
+		}
+		if ( !gotFov && ri.VR_GetFovTangents )
+		{
+			gotFov = ri.VR_GetFovTangents( &tanLeft, &tanRight, &tanUp, &tanDown );
+		}
+		if ( gotFov )
 		{
 			xmin = zProj * tanLeft;
 			xmax = zProj * tanRight;

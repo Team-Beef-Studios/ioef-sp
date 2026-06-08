@@ -104,6 +104,10 @@ typedef struct {
 	void (*TakeVideoFrame)( int h, int w, byte* captureBuffer, byte *encodeBuffer, qboolean motionJpeg );
 
 #ifdef BUILD_VR
+	qboolean (*VR_BeginStereoReplayCapture)( void );
+	qboolean (*VR_ReplayStereoFrame)( stereoFrame_t stereoFrame, qboolean finalReplay );
+	void (*VR_CancelStereoReplayCapture)( void );
+
 	// Present the desktop window (SDL_GL_SwapWindow).  In VR, GLimp_EndFrame
 	// suppresses the normal swap (the XR compositor presents the eye buffers);
 	// the VR layer calls this after blitting an eye to the window so the desktop
@@ -207,6 +211,8 @@ typedef struct {
 	qboolean (*VR_IsActive)( void );
 	qboolean (*VR_UseScreenLayer)( void );
 	qboolean (*VR_GetFovTangents)( float *tanLeft, float *tanRight, float *tanUp, float *tanDown );
+	qboolean (*VR_GetFovTangentsForEye)( int eye, float *tanLeft, float *tanRight, float *tanUp, float *tanDown );
+	float (*VR_GetEyeStereoSeparation)( int eye );
 #endif
 } refimport_t;
 

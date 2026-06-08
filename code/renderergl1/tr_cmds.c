@@ -21,6 +21,223 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "tr_local.h"
 
+#ifdef BUILD_VR
+typedef union {
+	void	*align;
+	byte	cmds[MAX_RENDER_COMMANDS + sizeof( int ) + sizeof( void * )];
+} vrStereoReplayBuffer_t;
+
+static vrStereoReplayBuffer_t	vrStereoReplayCommands;
+static vrStereoReplayBuffer_t	vrStereoReplayScratch;
+static int	vrStereoReplayCommandBytes;
+static qboolean vrStereoReplayActive;
+static qboolean vrStereoReplayLoggedInvalid;
+
+typedef struct {
+	int drawSurfs;
+	int stretchPics;
+	int swaps;
+} vrStereoReplayStats_t;
+
+static qboolean R_VR_InspectStereoReplayCommands( const byte *cmds, vrStereoReplayStats_t *stats ) {
+	const void *curCmd = cmds;
+
+	Com_Memset( stats, 0, sizeof( *stats ) );
+
+	while ( 1 ) {
+		curCmd = PADP( curCmd, sizeof( void * ) );
+
+		switch ( *(const int *)curCmd ) {
+		case RC_SET_COLOR:
+			curCmd = (const void *)( (const setColorCommand_t *)curCmd + 1 );
+			break;
+		case RC_STRETCH_PIC:
+			stats->stretchPics++;
+			curCmd = (const void *)( (const stretchPicCommand_t *)curCmd + 1 );
+			break;
+		case RC_DRAW_SURFS:
+			stats->drawSurfs++;
+			curCmd = (const void *)( (const drawSurfsCommand_t *)curCmd + 1 );
+			break;
+		case RC_DRAW_BUFFER:
+			curCmd = (const void *)( (const drawBufferCommand_t *)curCmd + 1 );
+			break;
+		case RC_SWAP_BUFFERS:
+			stats->swaps++;
+			curCmd = (const void *)( (const swapBuffersCommand_t *)curCmd + 1 );
+			break;
+		case RC_SCREENSHOT:
+			curCmd = (const void *)( (const screenshotCommand_t *)curCmd + 1 );
+			break;
+		case RC_VIDEOFRAME:
+			curCmd = (const void *)( (const videoFrameCommand_t *)curCmd + 1 );
+			break;
+		case RC_COLORMASK:
+			curCmd = (const void *)( (const colorMaskCommand_t *)curCmd + 1 );
+			break;
+		case RC_CLEARDEPTH:
+			curCmd = (const void *)( (const clearDepthCommand_t *)curCmd + 1 );
+			break;
+		case RC_END_OF_LIST:
+			return qtrue;
+		default:
+			return qfalse;
+		}
+	}
+}
+
+static void R_VR_GetHudReplayOffset( stereoFrame_t stereoFrame, float *x, float *y ) {
+	int eye;
+	float tanLeft, tanRight, tanUp, tanDown;
+	float angleLeft, angleRight, angleUp, angleDown;
+	float offX640, offY480;
+	float unionLeft, unionRight, unionUp, unionDown;
+	float fovXRad;
+	float depth;
+	float parallax;
+	cvar_t *hudDepth;
+
+	*x = 0.0f;
+	*y = 0.0f;
+
+	if ( stereoFrame != STEREO_LEFT && stereoFrame != STEREO_RIGHT ) {
+		return;
+	}
+	if ( !ri.VR_GetFovTangentsForEye ) {
+		return;
+	}
+
+	eye = ( stereoFrame == STEREO_LEFT ) ? 0 : 1;
+	if ( !ri.VR_GetFovTangentsForEye( eye, &tanLeft, &tanRight, &tanUp, &tanDown ) ) {
+		return;
+	}
+
+	angleLeft = atan( tanLeft );
+	angleRight = atan( tanRight );
+	angleUp = atan( tanUp );
+	angleDown = atan( tanDown );
+
+	offX640 = -0.5f * ( angleLeft + angleRight ) * 640.0f;
+	offY480 = -0.5f * ( angleUp + angleDown ) * 480.0f;
+
+	if ( ri.VR_GetFovTangentsForEye( -1, &unionLeft, &unionRight, &unionUp, &unionDown ) ) {
+		fovXRad = fabs( atan( unionLeft ) ) + fabs( atan( unionRight ) );
+	} else {
+		fovXRad = fabs( angleLeft ) + fabs( angleRight );
+	}
+	if ( fovXRad < 1.0f * (float)M_PI / 180.0f ) {
+		fovXRad = 90.0f * (float)M_PI / 180.0f;
+	}
+
+	hudDepth = ri.Cvar_Get( "cg_hudDepth", "2.0", 0 );
+	depth = hudDepth ? hudDepth->value : 2.0f;
+	if ( depth < 0.5f ) {
+		depth = 0.5f;
+	}
+	parallax = ( atan2( 0.032f, depth ) / ( fovXRad * 0.5f ) ) * 320.0f;
+
+	// The captured command stream is generated with vr.eye == 0, so HUD-scaled
+	// cgame draw commands already include the left-eye convergence parallax.
+	// Add the eye-specific asymmetric-FOV recentering, and for the right eye
+	// move from captured-left parallax to right-eye parallax.
+	if ( eye == 1 ) {
+		offX640 -= 2.0f * parallax;
+	}
+
+	*x = offX640 * ( (float)glConfig.vidWidth / 640.0f );
+	*y = -offY480 * ( (float)glConfig.vidHeight / 480.0f );
+}
+
+static void R_VR_PatchStretchPicCommand( stretchPicCommand_t *cmd, stereoFrame_t stereoFrame ) {
+	float x, y;
+
+	if ( cmd->x <= 1.0f && cmd->y <= 1.0f &&
+	     cmd->w >= glConfig.vidWidth - 2.0f &&
+	     cmd->h >= glConfig.vidHeight - 2.0f ) {
+		return;
+	}
+
+	R_VR_GetHudReplayOffset( stereoFrame, &x, &y );
+	cmd->x += x;
+	cmd->y += y;
+}
+
+static void R_VR_PatchDrawSurfsCommand( drawSurfsCommand_t *cmd, stereoFrame_t stereoFrame ) {
+	int eye;
+	trRefdef_t savedRefdef;
+
+	if ( stereoFrame != STEREO_LEFT && stereoFrame != STEREO_RIGHT ) {
+		return;
+	}
+
+	eye = ( stereoFrame == STEREO_LEFT ) ? 0 : 1;
+	cmd->refdef.stereoFrame = stereoFrame;
+	cmd->viewParms.stereoFrame = stereoFrame;
+
+	if ( !( cmd->refdef.rdflags & RDF_NOWORLDMODEL ) && ri.VR_GetEyeStereoSeparation ) {
+		float sep = ri.VR_GetEyeStereoSeparation( eye );
+		VectorMA( cmd->refdef.vieworg, sep, cmd->refdef.viewaxis[1], cmd->refdef.vieworg );
+		VectorCopy( cmd->refdef.vieworg, cmd->viewParms.or.origin );
+		VectorCopy( cmd->refdef.vieworg, cmd->viewParms.pvsOrigin );
+	}
+
+	R_RebuildViewParmsWorld( &cmd->viewParms );
+
+	savedRefdef = tr.refdef;
+	tr.refdef = cmd->refdef;
+	R_SetupProjection( &cmd->viewParms, r_zproj->value, qtrue );
+	R_SetupProjectionZ( &cmd->viewParms );
+	tr.refdef = savedRefdef;
+}
+
+static void R_VR_PatchStereoReplayCommands( byte *cmds, stereoFrame_t stereoFrame ) {
+	void *curCmd = cmds;
+	qboolean seenDrawSurfs = qfalse;
+
+	while ( 1 ) {
+		curCmd = PADP( curCmd, sizeof( void * ) );
+
+		switch ( *(int *)curCmd ) {
+		case RC_SET_COLOR:
+			curCmd = (void *)( (setColorCommand_t *)curCmd + 1 );
+			break;
+		case RC_STRETCH_PIC:
+			if ( seenDrawSurfs ) {
+				R_VR_PatchStretchPicCommand( (stretchPicCommand_t *)curCmd, stereoFrame );
+			}
+			curCmd = (void *)( (stretchPicCommand_t *)curCmd + 1 );
+			break;
+		case RC_DRAW_SURFS:
+			R_VR_PatchDrawSurfsCommand( (drawSurfsCommand_t *)curCmd, stereoFrame );
+			seenDrawSurfs = qtrue;
+			curCmd = (void *)( (drawSurfsCommand_t *)curCmd + 1 );
+			break;
+		case RC_DRAW_BUFFER:
+			curCmd = (void *)( (drawBufferCommand_t *)curCmd + 1 );
+			break;
+		case RC_SWAP_BUFFERS:
+			curCmd = (void *)( (swapBuffersCommand_t *)curCmd + 1 );
+			break;
+		case RC_SCREENSHOT:
+			curCmd = (void *)( (screenshotCommand_t *)curCmd + 1 );
+			break;
+		case RC_VIDEOFRAME:
+			curCmd = (void *)( (videoFrameCommand_t *)curCmd + 1 );
+			break;
+		case RC_COLORMASK:
+			curCmd = (void *)( (colorMaskCommand_t *)curCmd + 1 );
+			break;
+		case RC_CLEARDEPTH:
+			curCmd = (void *)( (clearDepthCommand_t *)curCmd + 1 );
+			break;
+		case RC_END_OF_LIST:
+		default:
+			return;
+		}
+	}
+}
+#endif
+
 /*
 =====================
 R_PerformanceCounters
@@ -492,6 +709,96 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 	}
 	backEnd.pc.msec = 0;
 }
+
+#ifdef BUILD_VR
+qboolean RE_VR_BeginStereoReplayCapture( void ) {
+	if ( !tr.registered ) {
+		return qfalse;
+	}
+	if ( r_debugSurface->integer ) {
+		return qfalse;
+	}
+
+	tr.vrStereoReplayCapture = qtrue;
+	vrStereoReplayActive = qfalse;
+	vrStereoReplayCommandBytes = 0;
+	return qtrue;
+}
+
+void RE_VR_CancelStereoReplayCapture( void ) {
+	tr.vrStereoReplayCapture = qfalse;
+	vrStereoReplayActive = qfalse;
+	vrStereoReplayCommandBytes = 0;
+	R_InitNextFrame();
+}
+
+qboolean RE_VR_ReplayStereoFrame( stereoFrame_t stereoFrame, qboolean finalReplay ) {
+	renderCommandList_t *cmdList;
+	vrStereoReplayStats_t stats;
+	static qboolean loggedReplayStats = qfalse;
+
+	if ( !tr.registered ) {
+		return qfalse;
+	}
+
+	cmdList = &backEndData->commands;
+
+	if ( !vrStereoReplayActive ) {
+		swapBuffersCommand_t *cmd = R_GetCommandBufferReserved( sizeof( *cmd ), 0 );
+		if ( !cmd ) {
+			RE_VR_CancelStereoReplayCapture();
+			return qfalse;
+		}
+		cmd->commandId = RC_SWAP_BUFFERS;
+
+		*(int *)( cmdList->cmds + cmdList->used ) = RC_END_OF_LIST;
+		vrStereoReplayCommandBytes = cmdList->used + sizeof( int );
+		if ( vrStereoReplayCommandBytes > (int)sizeof( vrStereoReplayCommands.cmds ) ) {
+			RE_VR_CancelStereoReplayCapture();
+			return qfalse;
+		}
+
+		Com_Memcpy( vrStereoReplayCommands.cmds, cmdList->cmds, vrStereoReplayCommandBytes );
+		if ( !R_VR_InspectStereoReplayCommands( vrStereoReplayCommands.cmds, &stats ) ||
+		     ( stats.drawSurfs == 0 && stats.stretchPics == 0 ) ) {
+			if ( !vrStereoReplayLoggedInvalid ) {
+				ri.Printf( PRINT_WARNING,
+					"VR stereo replay: invalid captured command stream (%d bytes, drawSurfs=%d, stretchPics=%d, swaps=%d).\n",
+					vrStereoReplayCommandBytes, stats.drawSurfs, stats.stretchPics, stats.swaps );
+				vrStereoReplayLoggedInvalid = qtrue;
+			}
+			RE_VR_CancelStereoReplayCapture();
+			return qfalse;
+		}
+		if ( !loggedReplayStats ) {
+			ri.Printf( PRINT_ALL,
+				"VR stereo replay: captured %d bytes (%d drawSurfs, %d stretchPics, %d swaps).\n",
+				vrStereoReplayCommandBytes, stats.drawSurfs, stats.stretchPics, stats.swaps );
+			loggedReplayStats = qtrue;
+		}
+		vrStereoReplayActive = qtrue;
+		tr.vrStereoReplayCapture = qfalse;
+	}
+
+	Com_Memcpy( vrStereoReplayScratch.cmds, vrStereoReplayCommands.cmds, vrStereoReplayCommandBytes );
+	R_VR_PatchStereoReplayCommands( vrStereoReplayScratch.cmds, stereoFrame );
+
+	if ( !r_skipBackEnd->integer ) {
+		RB_ExecuteRenderCommands( vrStereoReplayScratch.cmds );
+	}
+
+	if ( finalReplay ) {
+		R_PerformanceCounters();
+		R_InitNextFrame();
+		vrStereoReplayActive = qfalse;
+		vrStereoReplayCommandBytes = 0;
+		tr.frontEndMsec = 0;
+		backEnd.pc.msec = 0;
+	}
+
+	return qtrue;
+}
+#endif
 
 /*
 =============
