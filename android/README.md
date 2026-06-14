@@ -55,10 +55,16 @@ vr_weapon_adjustment_3  # WP_IMOD
 ```
 
 Each value is `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll`. Defaults are
-neutral and can be overridden from `/sdcard/EFXR/commandline.txt` while tuning.
+tuned in Elite-Force-VR and can be overridden from
+`/sdcard/EFXR/commandline.txt` while tuning.
 The shared engine cvar `vr_weapon_pitchadjust` is also archived and defaults to
 `-20.0`, matching JKXR; use it for global controller aim pitch correction before
 tuning per-weapon model alignment.
+Set `vr_align_weapons 1` to enable the shared JKXR-style alignment utility on
+standalone as well as PCVR. Enter/exit with the off-hand primary button; use
+dominant stick left/right to select a field, dominant stick up/down to adjust,
+dominant stick click to zero, and A/B to switch weapon. Values are written
+immediately to `vr_weapon_adjustment_N`.
 
 ## Status
 - **M3a** (this): gradle/ndk scaffolding + engine `.so` build files + engine

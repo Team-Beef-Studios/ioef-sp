@@ -22,6 +22,7 @@ cvar_t	*vr_turn_mode;
 cvar_t	*vr_turn_angle;
 cvar_t	*vr_switch_sticks;
 cvar_t	*vr_weapon_pitchadjust;
+cvar_t	*vr_align_weapons;
 
 void VR_InitCvars(void)
 {
@@ -53,4 +54,6 @@ void VR_InitCvars(void)
 	// Global controller aim pitch bias, matching JKXR's default.  The raw
 	// controller pose remains in ANGLES_DEFAULT; weapons use ANGLES_ADJUSTED.
 	vr_weapon_pitchadjust    = Cvar_Get( "vr_weapon_pitchadjust", "-20.0", CVAR_ARCHIVE );
+	// Development utility: enables the JKXR-style live weapon alignment mode.
+	vr_align_weapons         = Cvar_Get( "vr_align_weapons", "0", CVAR_ARCHIVE );
 }

@@ -129,6 +129,7 @@ typedef struct {
     float       curHeight;
 
     /* ---- weapon-alignment test mode (M2/M3) ---- */
+    char        weaponadjustment_info[256];
     char        test_name[256];
     float       test_scale;
     vec3_t      test_angles;

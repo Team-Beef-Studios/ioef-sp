@@ -375,14 +375,29 @@ cvars:
 | `vr_weapon_adjustment_2` | Compression Rifle | `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll` |
 | `vr_weapon_adjustment_3` | IMOD | `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll` |
 
-These are JKXR-style adjustment values. Defaults are neutral (`1.0,0,0,0,0,0,0`)
-so alignment can be tuned without rebuilding.
+These are JKXR-style adjustment values. Current source defaults in
+Elite-Force-VR are:
+
+| Cvar | Default |
+|------|---------|
+| `vr_weapon_adjustment_1` | `1.000,-5.340,6.600,-15.480,0.000,2.300,0.000` |
+| `vr_weapon_adjustment_2` | `1.215,-1.860,4.700,-5.780,0.000,0.000,0.000` |
+| `vr_weapon_adjustment_3` | `1.960,-2.040,2.660,-5.660,0.000,1.100,0.000` |
 
 The shared engine cvar `vr_weapon_pitchadjust` applies the JKXR-style global
 controller aim pitch bias before the per-weapon adjustment is applied. Its
 default is `-20.0`, matching JKXR. Use it to correct the natural controller aim
 angle globally, then use the per-weapon cvars for model-specific scale,
 position, and rotation.
+
+For live in-headset tuning, set `vr_align_weapons 1` and press the off-hand
+primary button to enter the JKXR-style alignment utility. In alignment mode,
+dominant-stick left/right selects `scale`, `right`, `up`, `forward`, `pitch`,
+`yaw`, or `roll`; dominant-stick up/down adjusts the selected value; dominant
+stick click zeros it; A/B switches weapon; the off-hand primary button exits.
+Every adjustment is written immediately to the active weapon's archived
+`vr_weapon_adjustment_N` cvar, so the aligned pose remains after leaving the
+mode.
 
 ### Multiplayer mode (standard ioEF)
 

@@ -183,6 +183,10 @@ alignment cvars live in the Elite-Force-VR cgame and follow the JKXR format
 `vr_weapon_adjustment_3` (IMOD). The engine also owns `vr_weapon_pitchadjust`,
 an archived JKXR-style global aim pitch bias defaulting to `-20.0`; it is applied
 when deriving `vr.weaponangles[ANGLES_ADJUSTED]` from the raw controller pose.
+The engine-side JKXR-style alignment utility is gated by archived cvar
+`vr_align_weapons`. When enabled, the off-hand primary button enters/exits
+`WEAPON_ALIGN` control scheme 99, and live edits are immediately written to the
+active `vr_weapon_adjustment_N` cvar.
 
 ## Debugging
 

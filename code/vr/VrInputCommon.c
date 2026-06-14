@@ -120,6 +120,12 @@ turn delta to cl.viewangles[YAW] (same incremental model as the HMD yaw).
 #define EF_BUTTON_USE           32
 #define EF_BUTTON_ALT_ATTACK    128
 
+/* EF SP weapon ids.  cl.snap.ps.weapon carries the SP value in sp_game mode;
+   do not use ioquake3's stock Q3 weapon enum names here. */
+#define EF_WP_PHASER              1
+#define EF_WP_COMPRESSION_RIFLE   2
+#define EF_WP_IMOD                3
+
 /* Per-frame controller output, read by the engine via the getters below. */
 static int   vr_controllerButtons = 0;      /* OR of EF_BUTTON_* this frame   */
 static int   vr_controllerUpMove  = 0;      /* +127 jump / -127 crouch / 0    */
@@ -165,6 +171,294 @@ static void VR_MenuButtonKey(const ovrInputStateTrackedRemote *cur,
 	}
 }
 
+static void VR_CacheControllerPoses(const ovrTrackedController *pDomTrack,
+                                    const ovrTrackedController *pOffTrack)
+{
+	vec3_t zero = {0.0f, 0.0f, 0.0f};
+
+	if (pDomTrack->Active)
+	{
+		VectorCopy(vr.weaponangles[ANGLES_ADJUSTED], vr.weaponangles_last[ANGLES_ADJUSTED]);
+		QuatToYawPitchRoll(pDomTrack->Pose.orientation, zero, vr.weaponangles[ANGLES_DEFAULT]);
+		zero[PITCH] = vr_weapon_pitchadjust->value;
+		QuatToYawPitchRoll(pDomTrack->Pose.orientation, zero, vr.weaponangles[ANGLES_ADJUSTED]);
+		zero[PITCH] = 0.0f;
+		VectorSubtract(vr.weaponangles[ANGLES_ADJUSTED], vr.weaponangles_last[ANGLES_ADJUSTED],
+			vr.weaponangles_delta[ANGLES_ADJUSTED]);
+
+		VectorSet(vr.weaponposition,
+			pDomTrack->Pose.position.x,
+			pDomTrack->Pose.position.y,
+			pDomTrack->Pose.position.z);
+		VectorSubtract(vr.weaponposition, vr.hmdposition, vr.weaponoffset);
+
+		for (int i = NUM_WEAPON_SAMPLES - 1; i > 0; --i)
+		{
+			VectorCopy(vr.weaponoffset_history[i - 1], vr.weaponoffset_history[i]);
+			vr.weaponoffset_history_timestamp[i] = vr.weaponoffset_history_timestamp[i - 1];
+		}
+		VectorCopy(vr.weaponoffset, vr.weaponoffset_history[0]);
+		vr.weaponoffset_timestamp = Sys_Milliseconds();
+		vr.weaponoffset_history_timestamp[0] = vr.weaponoffset_timestamp;
+	}
+
+	if (pOffTrack->Active)
+	{
+		VectorCopy(vr.offhandangles[ANGLES_ADJUSTED], vr.offhandangles_last[ANGLES_ADJUSTED]);
+		QuatToYawPitchRoll(pOffTrack->Pose.orientation, zero, vr.offhandangles[ANGLES_DEFAULT]);
+		zero[PITCH] = vr_weapon_pitchadjust->value;
+		QuatToYawPitchRoll(pOffTrack->Pose.orientation, zero, vr.offhandangles[ANGLES_ADJUSTED]);
+		zero[PITCH] = 0.0f;
+		VectorSubtract(vr.offhandangles[ANGLES_ADJUSTED], vr.offhandangles_last[ANGLES_ADJUSTED],
+			vr.offhandangles_delta[ANGLES_ADJUSTED]);
+
+		for (int i = 4; i > 0; --i)
+		{
+			VectorCopy(vr.offhandposition[i - 1], vr.offhandposition[i]);
+		}
+		VectorSet(vr.offhandposition[0],
+			pOffTrack->Pose.position.x,
+			pOffTrack->Pose.position.y,
+			pOffTrack->Pose.position.z);
+		VectorSubtract(vr.offhandposition[0], vr.hmdposition, vr.offhandoffset);
+	}
+}
+
+static qboolean VR_WeaponAlignSupportedWeapon(int weapon)
+{
+	return weapon == EF_WP_PHASER ||
+		weapon == EF_WP_COMPRESSION_RIFLE ||
+		weapon == EF_WP_IMOD;
+}
+
+static const char *VR_WeaponAlignName(int weapon)
+{
+	switch (weapon)
+	{
+	case EF_WP_PHASER:
+		return "Phaser";
+	case EF_WP_COMPRESSION_RIFLE:
+		return "Compression Rifle";
+	case EF_WP_IMOD:
+		return "IMOD";
+	default:
+		return "Unsupported";
+	}
+}
+
+typedef struct {
+	int weapon;
+	vr_weapon_adjustment_t adjustment;
+} vrWeaponAlignState_t;
+
+static void VR_WeaponAlignCvarName(int weapon, char *buffer, int bufferSize)
+{
+	Com_sprintf(buffer, bufferSize, "vr_weapon_adjustment_%i", weapon);
+}
+
+static void VR_WeaponAlignLoad(vrWeaponAlignState_t *state, int weapon)
+{
+	char cvarName[64];
+	cvar_t *cvar;
+
+	memset(&state->adjustment, 0, sizeof(state->adjustment));
+	state->adjustment.scale = 1.0f;
+	state->weapon = weapon;
+
+	if (!VR_WeaponAlignSupportedWeapon(weapon))
+	{
+		state->adjustment.loaded = qfalse;
+		return;
+	}
+
+	VR_WeaponAlignCvarName(weapon, cvarName, sizeof(cvarName));
+	cvar = Cvar_Get(cvarName, "1.0,0,0,0,0,0,0", CVAR_ARCHIVE);
+	sscanf(cvar->string, "%f,%f,%f,%f,%f,%f,%f",
+		&state->adjustment.scale,
+		&state->adjustment.offset[0],
+		&state->adjustment.offset[1],
+		&state->adjustment.offset[2],
+		&state->adjustment.angles[PITCH],
+		&state->adjustment.angles[YAW],
+		&state->adjustment.angles[ROLL]);
+	state->adjustment.loaded = qtrue;
+}
+
+static void VR_WeaponAlignWrite(const vrWeaponAlignState_t *state)
+{
+	char cvarName[64];
+	char buffer[256];
+
+	if (!state->adjustment.loaded || !VR_WeaponAlignSupportedWeapon(state->weapon))
+	{
+		return;
+	}
+
+	VR_WeaponAlignCvarName(state->weapon, cvarName, sizeof(cvarName));
+	Com_sprintf(buffer, sizeof(buffer), "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f",
+		state->adjustment.scale,
+		state->adjustment.offset[0],
+		state->adjustment.offset[1],
+		state->adjustment.offset[2],
+		state->adjustment.angles[PITCH],
+		state->adjustment.angles[YAW],
+		state->adjustment.angles[ROLL]);
+	Cvar_Set(cvarName, buffer);
+}
+
+static void VR_WeaponAlignStatus(const vrWeaponAlignState_t *state, const char *itemName, float itemValue)
+{
+	char cvarName[64];
+
+	if (!VR_WeaponAlignSupportedWeapon(state->weapon))
+	{
+		Com_sprintf(vr.weaponadjustment_info, sizeof(vr.weaponadjustment_info),
+			"Weapon alignment: unsupported weapon %i", state->weapon);
+		return;
+	}
+
+	VR_WeaponAlignCvarName(state->weapon, cvarName, sizeof(cvarName));
+	Com_sprintf(vr.weaponadjustment_info, sizeof(vr.weaponadjustment_info),
+		"%s (%s)  %s: %.3f",
+		VR_WeaponAlignName(state->weapon),
+		cvarName,
+		itemName,
+		itemValue);
+}
+
+static int vr_previousControlScheme = RIGHT_HANDED_DEFAULT;
+
+static void VR_ExitWeaponAlignMode(void)
+{
+	if (vr_previousControlScheme != LEFT_HANDED_DEFAULT)
+	{
+		vr_previousControlScheme = RIGHT_HANDED_DEFAULT;
+	}
+	Cvar_Set("vr_control_scheme", va("%i", vr_previousControlScheme));
+	vr.weaponadjustment_info[0] = '\0';
+}
+
+static void VR_HandleWeaponAlignInput(void)
+{
+	static vrWeaponAlignState_t state = { -1 };
+	static int itemIndex = 0;
+	static qboolean itemSwitched = qfalse;
+	static float joyx[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+
+	ovrInputStateTrackedRemote *pDom = &rightTrackedRemoteState_new;
+	ovrInputStateTrackedRemote *pDomOld = &rightTrackedRemoteState_old;
+	ovrInputStateTrackedRemote *pOff = &leftTrackedRemoteState_new;
+	ovrInputStateTrackedRemote *pOffOld = &leftTrackedRemoteState_old;
+	ovrTrackedController *pDomTrack = &rightRemoteTracking_new;
+	ovrTrackedController *pOffTrack = &leftRemoteTracking_new;
+	int weapon = cl.snap.ps.weapon;
+	float *items[7];
+	const char *itemNames[7] = { "scale", "right", "up", "forward", "pitch", "yaw", "roll" };
+	const float itemIncrements[7] = { 0.005f, 0.02f, 0.02f, 0.02f, 0.1f, 0.1f, 0.1f };
+	float primaryJoystickX = 0.0f;
+	qboolean changed = qfalse;
+
+	vr.right_handed = qtrue;
+	VR_CacheControllerPoses(pDomTrack, pOffTrack);
+
+	if (weapon != state.weapon)
+	{
+		VR_WeaponAlignLoad(&state, weapon);
+	}
+
+	items[0] = &state.adjustment.scale;
+	items[1] = &state.adjustment.offset[0];
+	items[2] = &state.adjustment.offset[1];
+	items[3] = &state.adjustment.offset[2];
+	items[4] = &state.adjustment.angles[PITCH];
+	items[5] = &state.adjustment.angles[YAW];
+	items[6] = &state.adjustment.angles[ROLL];
+
+	if ((pOff->Buttons & xrButton_X) && !(pOffOld->Buttons & xrButton_X))
+	{
+		VR_ExitWeaponAlignMode();
+		goto saveState;
+	}
+
+	if (!VR_WeaponAlignSupportedWeapon(weapon))
+	{
+		VR_WeaponAlignStatus(&state, itemNames[itemIndex], 0.0f);
+		goto saveState;
+	}
+
+	for (int i = 3; i > 0; --i)
+	{
+		joyx[i] = joyx[i - 1];
+	}
+	joyx[0] = pDom->Joystick.x;
+	for (int i = 0; i < 4; ++i)
+	{
+		primaryJoystickX += joyx[i];
+	}
+	primaryJoystickX *= 0.25f;
+
+	if (between(-0.2f, pDom->Joystick.y, 0.2f) &&
+		(between(0.8f, primaryJoystickX, 1.0f) ||
+		 between(-1.0f, primaryJoystickX, -0.8f)))
+	{
+		if (!itemSwitched)
+		{
+			itemIndex += primaryJoystickX > 0.0f ? 1 : -1;
+			if (itemIndex >= 7) itemIndex = 0;
+			if (itemIndex < 0) itemIndex = 6;
+			itemSwitched = qtrue;
+		}
+	}
+	else
+	{
+		itemSwitched = qfalse;
+	}
+
+	if (((pDom->Buttons & xrButton_Joystick) != (pDomOld->Buttons & xrButton_Joystick)) &&
+		(pDomOld->Buttons & xrButton_Joystick))
+	{
+		*items[itemIndex] = 0.0f;
+		changed = qtrue;
+	}
+
+	if (between(-0.2f, primaryJoystickX, 0.2f))
+	{
+		if (pDom->Joystick.y > 0.6f)
+		{
+			*items[itemIndex] += itemIncrements[itemIndex];
+			changed = qtrue;
+		}
+		else if (pDom->Joystick.y < -0.6f)
+		{
+			*items[itemIndex] -= itemIncrements[itemIndex];
+			changed = qtrue;
+		}
+	}
+
+	if (((pDom->Buttons & xrButton_A) != (pDomOld->Buttons & xrButton_A)) &&
+		(pDomOld->Buttons & xrButton_A))
+	{
+		Cbuf_AddText("weapnext\n");
+	}
+
+	if (((pDom->Buttons & xrButton_B) != (pDomOld->Buttons & xrButton_B)) &&
+		(pDomOld->Buttons & xrButton_B))
+	{
+		Cbuf_AddText("weapprev\n");
+	}
+
+	if (changed)
+	{
+		VR_WeaponAlignWrite(&state);
+	}
+
+	VR_WeaponAlignStatus(&state, itemNames[itemIndex], *items[itemIndex]);
+
+saveState:
+	rightTrackedRemoteState_old = rightTrackedRemoteState_new;
+	leftTrackedRemoteState_old  = leftTrackedRemoteState_new;
+}
+
 void VR_HandleControllerInput()
 {
 	TBXR_UpdateControllers();
@@ -173,6 +467,12 @@ void VR_HandleControllerInput()
 	vr_controllerButtons = 0;
 	vr_controllerUpMove  = 0;
 	vr_turnDelta         = 0.0f;
+
+	if (vr_control_scheme->integer == WEAPON_ALIGN)
+	{
+		VR_HandleWeaponAlignInput();
+		return;
+	}
 
 	// Ensure handedness flags are set (mirrors RealRTCWXR).  <10 = right-handed.
 	vr.right_handed = vr_control_scheme->integer < 10;
@@ -214,54 +514,22 @@ void VR_HandleControllerInput()
 	// Cache the current dominant/off-hand aim poses for the SP modules.  The
 	// positions remain in OpenXR metres; cgame/game convert them into EF world
 	// units with vr.worldscale when placing weapons and muzzle traces.
+	VR_CacheControllerPoses(pDomTrack, pOffTrack);
+
+	if (vr_align_weapons->integer)
 	{
-		vec3_t zero = {0.0f, 0.0f, 0.0f};
-
-		if (pDomTrack->Active)
+		qboolean alignNow = (pOff->Buttons & offFace1) != 0;
+		qboolean alignWas = (pOffOld->Buttons & offFace1) != 0;
+		if (alignNow && !alignWas)
 		{
-			VectorCopy(vr.weaponangles[ANGLES_ADJUSTED], vr.weaponangles_last[ANGLES_ADJUSTED]);
-			QuatToYawPitchRoll(pDomTrack->Pose.orientation, zero, vr.weaponangles[ANGLES_DEFAULT]);
-			zero[PITCH] = vr_weapon_pitchadjust->value;
-			QuatToYawPitchRoll(pDomTrack->Pose.orientation, zero, vr.weaponangles[ANGLES_ADJUSTED]);
-			zero[PITCH] = 0.0f;
-			VectorSubtract(vr.weaponangles[ANGLES_ADJUSTED], vr.weaponangles_last[ANGLES_ADJUSTED],
-				vr.weaponangles_delta[ANGLES_ADJUSTED]);
-
-			VectorSet(vr.weaponposition,
-				pDomTrack->Pose.position.x,
-				pDomTrack->Pose.position.y,
-				pDomTrack->Pose.position.z);
-			VectorSubtract(vr.weaponposition, vr.hmdposition, vr.weaponoffset);
-
-			for (int i = NUM_WEAPON_SAMPLES - 1; i > 0; --i)
-			{
-				VectorCopy(vr.weaponoffset_history[i - 1], vr.weaponoffset_history[i]);
-				vr.weaponoffset_history_timestamp[i] = vr.weaponoffset_history_timestamp[i - 1];
-			}
-			VectorCopy(vr.weaponoffset, vr.weaponoffset_history[0]);
-			vr.weaponoffset_timestamp = Sys_Milliseconds();
-			vr.weaponoffset_history_timestamp[0] = vr.weaponoffset_timestamp;
-		}
-
-		if (pOffTrack->Active)
-		{
-			VectorCopy(vr.offhandangles[ANGLES_ADJUSTED], vr.offhandangles_last[ANGLES_ADJUSTED]);
-			QuatToYawPitchRoll(pOffTrack->Pose.orientation, zero, vr.offhandangles[ANGLES_DEFAULT]);
-			zero[PITCH] = vr_weapon_pitchadjust->value;
-			QuatToYawPitchRoll(pOffTrack->Pose.orientation, zero, vr.offhandangles[ANGLES_ADJUSTED]);
-			zero[PITCH] = 0.0f;
-			VectorSubtract(vr.offhandangles[ANGLES_ADJUSTED], vr.offhandangles_last[ANGLES_ADJUSTED],
-				vr.offhandangles_delta[ANGLES_ADJUSTED]);
-
-			for (int i = 4; i > 0; --i)
-			{
-				VectorCopy(vr.offhandposition[i - 1], vr.offhandposition[i]);
-			}
-			VectorSet(vr.offhandposition[0],
-				pOffTrack->Pose.position.x,
-				pOffTrack->Pose.position.y,
-				pOffTrack->Pose.position.z);
-			VectorSubtract(vr.offhandposition[0], vr.hmdposition, vr.offhandoffset);
+			vr_previousControlScheme = vr_control_scheme->integer == LEFT_HANDED_DEFAULT ?
+				LEFT_HANDED_DEFAULT : RIGHT_HANDED_DEFAULT;
+			Cvar_Set("vr_control_scheme", va("%i", WEAPON_ALIGN));
+			Com_sprintf(vr.weaponadjustment_info, sizeof(vr.weaponadjustment_info),
+				"Weapon alignment mode");
+			rightTrackedRemoteState_old = rightTrackedRemoteState_new;
+			leftTrackedRemoteState_old  = leftTrackedRemoteState_new;
+			return;
 		}
 	}
 

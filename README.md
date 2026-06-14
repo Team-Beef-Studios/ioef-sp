@@ -137,9 +137,15 @@ The first motion-controlled weapons are `WP_PHASER`, `WP_COMPRESSION_RIFLE` and
 `WP_IMOD`. Their per-weapon alignment cvars live in the Elite-Force-VR cgame:
 `vr_weapon_adjustment_1`, `vr_weapon_adjustment_2` and `vr_weapon_adjustment_3`.
 The value format follows JKXR: `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll`.
-Defaults are neutral so the weapons can be tuned manually in-headset. The shared
-engine-side `vr_weapon_pitchadjust` cvar applies a global controller aim pitch
-bias before those per-weapon adjustments; its default is `-20.0`, matching JKXR.
+Defaults are tuned in the Elite-Force-VR source and can be adjusted manually
+in-headset. The shared engine-side `vr_weapon_pitchadjust` cvar applies a global
+controller aim pitch bias before those per-weapon adjustments; its default is
+`-20.0`, matching JKXR.
+Set `vr_align_weapons 1` to enable the JKXR-style live alignment utility. Press
+the off-hand primary button to enter alignment mode, use the dominant stick to
+select and adjust fields, click the stick to zero the selected field, use A/B to
+switch weapons, and press the off-hand primary button again to exit. Edits are
+written immediately to the active weapon's `vr_weapon_adjustment_N` cvar.
 
 ---
 
