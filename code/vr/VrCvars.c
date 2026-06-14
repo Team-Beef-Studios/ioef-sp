@@ -21,6 +21,7 @@ cvar_t	*vr_refresh;
 cvar_t	*vr_turn_mode;
 cvar_t	*vr_turn_angle;
 cvar_t	*vr_switch_sticks;
+cvar_t	*vr_weapon_pitchadjust;
 
 void VR_InitCvars(void)
 {
@@ -49,4 +50,7 @@ void VR_InitCvars(void)
 	// Swap which thumbstick moves vs turns (0 = move on dominant hand's off
 	// stick, turn on dominant; 1 = swapped).  Matches RealRTCWXR.
 	vr_switch_sticks         = Cvar_Get( "vr_switch_sticks", "0", CVAR_ARCHIVE );
+	// Global controller aim pitch bias, matching JKXR's default.  The raw
+	// controller pose remains in ANGLES_DEFAULT; weapons use ANGLES_ADJUSTED.
+	vr_weapon_pitchadjust    = Cvar_Get( "vr_weapon_pitchadjust", "-20.0", CVAR_ARCHIVE );
 }

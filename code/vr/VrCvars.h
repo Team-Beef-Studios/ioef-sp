@@ -27,6 +27,7 @@ extern cvar_t	*vr_refresh;
 extern cvar_t	*vr_turn_mode;
 extern cvar_t	*vr_turn_angle;
 extern cvar_t	*vr_switch_sticks;
+extern cvar_t	*vr_weapon_pitchadjust;
 
 void VR_InitCvars(void);
 

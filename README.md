@@ -27,6 +27,8 @@ and adds:
   and Android, and is not GL multiview.
 - **Motion-controller input** — thumbstick locomotion, snap/smooth turn, trigger
   fire, grip crouch, face-button jump/use, and a laser-pointer for menus.
+- **Motion-controlled weapons** — Phaser, Compression Rifle and IMOD render at
+  the dominant controller and fire from the controller muzzle direction in VR.
 - **Two delivery targets:**
   - **PC VR** (SteamVR / Oculus / WMR / Pico via OpenXR) — native Windows x86_64.
   - **Standalone Android** (Meta Quest, Pico) — arm64 `.apk`.
@@ -130,6 +132,14 @@ replays the captured renderer commands for the left and right OpenXR eye buffers
 This reduces CPU/frontend work; it still draws each eye separately and is not a
 GL4ES/OpenGL multiview path. Virtual-screen menus/cinematics and flat non-VR
 rendering remain separate paths.
+
+The first motion-controlled weapons are `WP_PHASER`, `WP_COMPRESSION_RIFLE` and
+`WP_IMOD`. Their per-weapon alignment cvars live in the Elite-Force-VR cgame:
+`vr_weapon_adjustment_1`, `vr_weapon_adjustment_2` and `vr_weapon_adjustment_3`.
+The value format follows JKXR: `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll`.
+Defaults are neutral so the weapons can be tuned manually in-headset. The shared
+engine-side `vr_weapon_pitchadjust` cvar applies a global controller aim pitch
+bias before those per-weapon adjustments; its default is `-20.0`, matching JKXR.
 
 ---
 

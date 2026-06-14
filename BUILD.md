@@ -358,6 +358,32 @@ not reduce GPU draw submission to a single eye-independent draw. The old
 immersive two-pass renderer has been removed; virtual-screen VR mode and flat
 non-VR rendering remain separate paths.
 
+### Motion-Controlled Weapons
+
+In VR, the Phaser (`WP_PHASER`), Compression Rifle (`WP_COMPRESSION_RIFLE`) and
+IMOD (`WP_IMOD`) are positioned from the dominant controller instead of being
+fixed to the headset. Their traces/effects originate from the rendered muzzle
+when available, falling back to the controller pose if the cgame has not updated
+the muzzle that frame.
+
+Manual weapon alignment is handled in the Elite-Force-VR cgame with archived
+cvars:
+
+| Cvar | Weapon | Format |
+|------|--------|--------|
+| `vr_weapon_adjustment_1` | Phaser | `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll` |
+| `vr_weapon_adjustment_2` | Compression Rifle | `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll` |
+| `vr_weapon_adjustment_3` | IMOD | `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll` |
+
+These are JKXR-style adjustment values. Defaults are neutral (`1.0,0,0,0,0,0,0`)
+so alignment can be tuned without rebuilding.
+
+The shared engine cvar `vr_weapon_pitchadjust` applies the JKXR-style global
+controller aim pitch bias before the per-weapon adjustment is applied. Its
+default is `-20.0`, matching JKXR. Use it to correct the natural controller aim
+angle globally, then use the per-weapon cvars for model-specific scale,
+position, and rotation.
+
 ### Multiplayer mode (standard ioEF)
 
 ```bash

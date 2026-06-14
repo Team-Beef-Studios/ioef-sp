@@ -44,6 +44,22 @@ backend commands are replayed into both OpenXR eye buffers with per-eye
 projection and IPD. This is intended to reduce CPU/frontend work; it is not GL
 multiview and still draws each eye separately.
 
+The first motion-controlled weapons are Phaser, Compression Rifle and IMOD. The
+Android build uses the same Elite-Force-VR source and the same archived
+alignment cvars as PCVR:
+
+```
+vr_weapon_adjustment_1  # WP_PHASER
+vr_weapon_adjustment_2  # WP_COMPRESSION_RIFLE
+vr_weapon_adjustment_3  # WP_IMOD
+```
+
+Each value is `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll`. Defaults are
+neutral and can be overridden from `/sdcard/EFXR/commandline.txt` while tuning.
+The shared engine cvar `vr_weapon_pitchadjust` is also archived and defaults to
+`-20.0`, matching JKXR; use it for global controller aim pitch correction before
+tuning per-weapon model alignment.
+
 ## Status
 - **M3a** (this): gradle/ndk scaffolding + engine `.so` build files + engine
   edits (`sys_loadlib.h` Android dlopen, `sys_main.c` `main()` guard).

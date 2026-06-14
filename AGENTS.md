@@ -173,6 +173,17 @@ renderer commands are replayed into the left and right OpenXR eye buffers with
 per-eye projection and IPD. It is intended to reduce CPU/frontend work and is
 not GL multiview. The old immersive two-pass renderer has been removed.
 
+Motion-controlled VR weapons currently cover `WP_PHASER`,
+`WP_COMPRESSION_RIFLE`, and `WP_IMOD`. The dominant controller pose is cached in
+`vr.weaponposition` / `vr.weaponoffset` / `vr.weaponangles[ANGLES_ADJUSTED]` by
+the engine, then consumed by the separate Elite-Force-VR cgame/game. Manual
+alignment cvars live in the Elite-Force-VR cgame and follow the JKXR format
+`scale,offsetX,offsetY,offsetZ,pitch,yaw,roll`: `vr_weapon_adjustment_1`
+(Phaser), `vr_weapon_adjustment_2` (Compression Rifle), and
+`vr_weapon_adjustment_3` (IMOD). The engine also owns `vr_weapon_pitchadjust`,
+an archived JKXR-style global aim pitch bias defaulting to `-20.0`; it is applied
+when deriving `vr.weaponangles[ANGLES_ADJUSTED]` from the raw controller pose.
+
 ## Debugging
 
 ```bash

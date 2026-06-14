@@ -180,6 +180,7 @@ void VR_HandleControllerInput()
 	// Pick dominant (weapon) vs off hand from the control scheme, RealRTCWXR-style.
 	ovrInputStateTrackedRemote *pDom, *pOff, *pDomOld, *pOffOld;
 	ovrTrackedController       *pDomTrack;   // dominant-hand aim pose (menu pointer)
+	ovrTrackedController       *pOffTrack;   // off-hand aim pose
 	int domFace1, domFace2;   // dominant-hand face buttons (jump, use)
 	int offFace1;             // off-hand face button 1 (hold = mission objectives)
 	int offFace2;             // off-hand face button 2 (toggle in-game menu)
@@ -190,6 +191,7 @@ void VR_HandleControllerInput()
 		pOff = &rightTrackedRemoteState_new;
 		pOffOld = &rightTrackedRemoteState_old;
 		pDomTrack = &leftRemoteTracking_new;
+		pOffTrack = &rightRemoteTracking_new;
 		domFace1 = xrButton_X;   // jump
 		domFace2 = xrButton_Y;   // use
 		offFace1 = xrButton_A;   // off-hand (right) primary -> mission info
@@ -202,10 +204,65 @@ void VR_HandleControllerInput()
 		pOff = &leftTrackedRemoteState_new;
 		pOffOld = &leftTrackedRemoteState_old;
 		pDomTrack = &rightRemoteTracking_new;
+		pOffTrack = &leftRemoteTracking_new;
 		domFace1 = xrButton_A;   // jump
 		domFace2 = xrButton_B;   // use
 		offFace1 = xrButton_X;   // off-hand (left) primary -> mission info
 		offFace2 = xrButton_Y;   // off-hand (left) secondary -> menu
+	}
+
+	// Cache the current dominant/off-hand aim poses for the SP modules.  The
+	// positions remain in OpenXR metres; cgame/game convert them into EF world
+	// units with vr.worldscale when placing weapons and muzzle traces.
+	{
+		vec3_t zero = {0.0f, 0.0f, 0.0f};
+
+		if (pDomTrack->Active)
+		{
+			VectorCopy(vr.weaponangles[ANGLES_ADJUSTED], vr.weaponangles_last[ANGLES_ADJUSTED]);
+			QuatToYawPitchRoll(pDomTrack->Pose.orientation, zero, vr.weaponangles[ANGLES_DEFAULT]);
+			zero[PITCH] = vr_weapon_pitchadjust->value;
+			QuatToYawPitchRoll(pDomTrack->Pose.orientation, zero, vr.weaponangles[ANGLES_ADJUSTED]);
+			zero[PITCH] = 0.0f;
+			VectorSubtract(vr.weaponangles[ANGLES_ADJUSTED], vr.weaponangles_last[ANGLES_ADJUSTED],
+				vr.weaponangles_delta[ANGLES_ADJUSTED]);
+
+			VectorSet(vr.weaponposition,
+				pDomTrack->Pose.position.x,
+				pDomTrack->Pose.position.y,
+				pDomTrack->Pose.position.z);
+			VectorSubtract(vr.weaponposition, vr.hmdposition, vr.weaponoffset);
+
+			for (int i = NUM_WEAPON_SAMPLES - 1; i > 0; --i)
+			{
+				VectorCopy(vr.weaponoffset_history[i - 1], vr.weaponoffset_history[i]);
+				vr.weaponoffset_history_timestamp[i] = vr.weaponoffset_history_timestamp[i - 1];
+			}
+			VectorCopy(vr.weaponoffset, vr.weaponoffset_history[0]);
+			vr.weaponoffset_timestamp = Sys_Milliseconds();
+			vr.weaponoffset_history_timestamp[0] = vr.weaponoffset_timestamp;
+		}
+
+		if (pOffTrack->Active)
+		{
+			VectorCopy(vr.offhandangles[ANGLES_ADJUSTED], vr.offhandangles_last[ANGLES_ADJUSTED]);
+			QuatToYawPitchRoll(pOffTrack->Pose.orientation, zero, vr.offhandangles[ANGLES_DEFAULT]);
+			zero[PITCH] = vr_weapon_pitchadjust->value;
+			QuatToYawPitchRoll(pOffTrack->Pose.orientation, zero, vr.offhandangles[ANGLES_ADJUSTED]);
+			zero[PITCH] = 0.0f;
+			VectorSubtract(vr.offhandangles[ANGLES_ADJUSTED], vr.offhandangles_last[ANGLES_ADJUSTED],
+				vr.offhandangles_delta[ANGLES_ADJUSTED]);
+
+			for (int i = 4; i > 0; --i)
+			{
+				VectorCopy(vr.offhandposition[i - 1], vr.offhandposition[i]);
+			}
+			VectorSet(vr.offhandposition[0],
+				pOffTrack->Pose.position.x,
+				pOffTrack->Pose.position.y,
+				pOffTrack->Pose.position.z);
+			VectorSubtract(vr.offhandposition[0], vr.hmdposition, vr.offhandoffset);
+		}
 	}
 
 	// vr_switch_sticks swaps which stick moves vs turns (the move stick is
