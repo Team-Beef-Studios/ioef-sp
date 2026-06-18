@@ -48,3 +48,5 @@ mcp/node_modules/
 mcp/dist/
 build/
 build_out.txt
+AGENTS.MD
+CLAUDE.MD
