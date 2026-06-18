@@ -8,6 +8,9 @@ Makefile.local
 /efbuild.log
 /efgame_*.log
 
+# Packaged release archives (output of package-pcvr.ps1)
+/dist/
+
 # OS X
 ####################
 .Spotlight-V100/

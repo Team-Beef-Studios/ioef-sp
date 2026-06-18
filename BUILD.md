@@ -407,7 +407,33 @@ mode.
 
 ---
 
-## 5. Debugging
+## 5. Package a distributable build (.zip)
+
+Once the engine and SP DLLs are built and deployed into `baseEF/` (sections 1–3),
+`package-pcvr.ps1` (repo root) bundles **only the runtime** into a versioned zip
+for distribution:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\package-pcvr.ps1
+```
+
+It produces `dist/EliteForceVR-PCVR-v<version>.zip` containing the exe, runtime
+DLLs (renderer, OpenXR loader, SDL2, MinGW runtime), the SP `efgame`/`efui` DLLs,
+`autoexec.cfg`, the `run-*.bat` launchers, and a generated `README-FIRST.txt`.
+
+- **Version** is read from `EFVR_VERSION_NUMBER` in the sibling Elite-Force-VR
+  `qcommon/stv_version.h` (the number `Q3_VERSION` resolves to), so the zip name
+  tracks the VR-port version automatically.
+- **Game data is excluded** — no `baseEF/*.pk3` is packaged (players supply their
+  own retail Elite Force data); the script also sweeps out any stray `.pk3`.
+- It **fails loudly** if a required file (e.g. the exe) is missing from the build.
+
+Useful parameters: `-BuildDir`, `-VersionHeader`, `-OutDir`, and `-Version` (to
+override the version string). The `dist/` output directory is gitignored.
+
+---
+
+## 6. Debugging
 
 ### GDB
 
