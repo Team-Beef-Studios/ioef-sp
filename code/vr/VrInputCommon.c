@@ -734,6 +734,9 @@ void VR_HandleControllerInput()
 	// click is separate from the stick's analog X/Y and never disturbs
 	// movement/turn).  Edge-detected on the press; routed through the cgame's
 	// cg_draw2D / cg_drawGun cvars (both CVAR_ARCHIVE, default 1).
+	// Off by default; gated behind the vr_hud_toggle cvar (set it in the config
+	// to enable this development utility).
+	if (vr_hud_toggle->integer)
 	{
 		qboolean hudNow = (leftTrackedRemoteState_new.Buttons & xrButton_LThumb) != 0;
 		qboolean hudWas = (leftTrackedRemoteState_old.Buttons & xrButton_LThumb) != 0;
