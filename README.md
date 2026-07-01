@@ -147,6 +147,12 @@ select and adjust fields, click the stick to zero the selected field, use A/B to
 switch weapons, and press the off-hand primary button again to exit. Edits are
 written immediately to the active weapon's `vr_weapon_adjustment_N` cvar.
 
+Set `vr_hud_toggle 1` (default `0`, off) to enable a development utility that
+hides the view for unobstructed inspection: clicking the **left thumbstick**
+toggles the 2D HUD and the weapon viewmodel off, and clicking it again restores
+them (routed through the cgame's `cg_draw2D` / `cg_drawGun` cvars). It is
+disabled by default and must be set in the config to take effect.
+
 ---
 
 ## Documentation

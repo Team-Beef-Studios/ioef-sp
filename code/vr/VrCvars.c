@@ -23,6 +23,7 @@ cvar_t	*vr_turn_angle;
 cvar_t	*vr_switch_sticks;
 cvar_t	*vr_weapon_pitchadjust;
 cvar_t	*vr_align_weapons;
+cvar_t	*vr_hud_toggle;
 
 void VR_InitCvars(void)
 {
@@ -56,4 +57,8 @@ void VR_InitCvars(void)
 	vr_weapon_pitchadjust    = Cvar_Get( "vr_weapon_pitchadjust", "-20.0", CVAR_ARCHIVE );
 	// Development utility: enables the JKXR-style live weapon alignment mode.
 	vr_align_weapons         = Cvar_Get( "vr_align_weapons", "0", CVAR_ARCHIVE );
+	// Development utility: when 1, clicking the LEFT thumbstick toggles the 2D
+	// HUD and weapon viewmodel off/on for an unobstructed view.  Off by default;
+	// set in the config to enable.
+	vr_hud_toggle            = Cvar_Get( "vr_hud_toggle", "0", CVAR_ARCHIVE );
 }
