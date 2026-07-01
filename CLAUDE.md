@@ -143,7 +143,6 @@ The SP game module uses different struct layouts from ioEF/ioquake3. All SP type
 
 The following SP features are currently stubbed (no-op or minimal implementations):
 
-- **Save/load system:** `AppendToSaveGame`, `ReadFromSaveGame`, etc.
 - **ICARUS scripting engine:** `WriteCam` and related hooks
 - **Ambient sound sets:** `S_UpdateAmbientSet`, `S_AddLocalSet`, `AS_*`
 - **Force feedback:** `FF_StartFX`, `FF_EnsureFX`, etc.

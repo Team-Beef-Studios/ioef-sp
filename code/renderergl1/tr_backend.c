@@ -625,8 +625,20 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 						else
 						{
 							viewParms_t temp = backEnd.viewParms;
+							trRefdef_t  savedRefdef = tr.refdef;
 
+							// R_SetupProjection reads tr.refdef.rdflags to choose between the
+							// HMD per-eye asymmetric FOV (a real world view) and the symmetric
+							// refdef FOV (RDF_NOWORLDMODEL HUD sub-scenes).  In the backend
+							// tr.refdef is stale -- it still holds whatever scene the frontend
+							// built LAST, which for the VR stereo-replay path is often a teammate
+							// head portrait (RDF_NOWORLDMODEL).  That made the first-person weapon
+							// borrow the portrait's symmetric projection and look wrong in VR.
+							// Point tr.refdef at the scene actually being drawn so the weapon gets
+							// the correct per-eye projection.
+							tr.refdef = backEnd.refdef;
 							R_SetupProjection(&temp, r_znear->value, qfalse);
+							tr.refdef = savedRefdef;
 
 							qglMatrixMode(GL_PROJECTION);
 							qglLoadMatrixf(temp.projectionMatrix);

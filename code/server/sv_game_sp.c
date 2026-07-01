@@ -1990,7 +1990,16 @@ qboolean SV_SP_LoadGame( const char *slotName ) {
 	fileHandle_t file;
 	int gameChunkValue;
 
-	if ( !SV_SP_IsActive() || !ge ) {
+	// A load is valid even when no SP game is currently running -- e.g. loading
+	// a save directly from the main menu after a fresh restart, when ge == NULL.
+	// Phase 1 (this function) only reads the save header and issues an "spmap"
+	// command; that command loads the SP game DLL (SV_SP_InitGameProgs, which
+	// sets ge) and Phase 2 (SV_SP_LoadPendingSave) restores the state.  So all
+	// we require here is that SP mode is enabled, so spmap loads the SP game
+	// rather than a stock MP game.  (Requiring ge != NULL here was the cause of
+	// "load fails after a restart but works mid-session" -- mid-session ge is
+	// already set; at a cold menu it is not.)
+	if ( !ge && !Cvar_VariableIntegerValue( "sp_game" ) ) {
 		Com_Printf( "load: SP game is not active\n" );
 		return qfalse;
 	}
