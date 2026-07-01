@@ -907,6 +907,66 @@ static void SV_SP_BuildSaveQPath( const char *baseName, char *outQPath, int outS
 	Com_sprintf( outQPath, outSize, "saves/%s.sav", baseName );
 }
 
+/*
+===============
+SV_SP_ResolveSpecialSlotName
+
+Raven's SP save system uses a small set of reserved names that the game
+module issues via gi.SendConsoleCommand, distinguished by an asterisk that
+is a *marker*, NOT a literal filename character:
+
+  "save auto*"     -- checkpoint autosave        (trailing '*')
+  "load *respawn"  -- reload after the player dies (leading '*')
+
+'*' is illegal in a Windows path, so passing these through verbatim made
+BOTH the checkpoint write and the death reload fail ("Failed to open
+savegame saves/*respawn.sav") -- which left the player stuck on the death
+screen with no working "press to continue" (the game's respawn() runs
+`load *respawn`, see g_client.cpp / g_active.cpp).
+
+Both names refer to the same automatic save slot, which we store on disk as
+plain "auto":
+  - a leading  '*' (any suffix) means "reload the automatic checkpoint" -> "auto"
+  - a trailing '*' means "write the automatic checkpoint"               -> name minus '*'
+Anything without a '*' passes through unchanged.  Sets *isRespawn when this
+was a leading-'*' death-reload request (the caller falls back to restarting
+the level if no checkpoint has been written yet).
+===============
+*/
+static void SV_SP_ResolveSpecialSlotName( const char *in, char *out, int outSize, qboolean *isRespawn ) {
+	size_t len;
+
+	if ( isRespawn ) {
+		*isRespawn = qfalse;
+	}
+
+	if ( !in || !in[0] ) {
+		Q_strncpyz( out, in ? in : "", outSize );
+		return;
+	}
+
+	if ( in[0] == '*' ) {
+		// Leading '*' (e.g. "*respawn"): reload the automatic checkpoint save.
+		if ( isRespawn ) {
+			*isRespawn = qtrue;
+		}
+		Q_strncpyz( out, "auto", outSize );
+		return;
+	}
+
+	len = strlen( in );
+	if ( len > 1 && in[len - 1] == '*' ) {
+		// Trailing '*' (e.g. "auto*"): write to the automatic checkpoint slot.
+		Q_strncpyz( out, in, outSize );
+		if ( (int)len <= outSize ) {
+			out[len - 1] = '\0';
+		}
+		return;
+	}
+
+	Q_strncpyz( out, in, outSize );
+}
+
 // Read the current map name from the "mapname" cvar.
 static void SV_SP_GetMapName( char *outMapName, int outSize ) {
 	Q_strncpyz( outMapName, Cvar_VariableString( "mapname" ), outSize );
@@ -1885,6 +1945,7 @@ corrupting an existing save file for the same slot.
 */
 qboolean SV_SP_SaveGame( const char *slotName ) {
 	char baseName[MAX_QPATH];
+	char resolvedName[MAX_QPATH];
 	char finalQPath[MAX_QPATH];
 	char mapName[SP_SAVE_MAP_SIZE];
 	byte comment[SP_SAVE_COMMENT_SIZE];
@@ -1899,7 +1960,11 @@ qboolean SV_SP_SaveGame( const char *slotName ) {
 		return qfalse;
 	}
 
-	if ( !SV_SP_NormalizeSaveSlotName( slotName, baseName, sizeof( baseName ) ) ) {
+	// Resolve Raven's '*' special-save names (e.g. the game's "save auto*")
+	// to a real slot before validating -- otherwise the '*' reaches the
+	// filesystem and the write fails on Windows.
+	SV_SP_ResolveSpecialSlotName( slotName, resolvedName, sizeof( resolvedName ), NULL );
+	if ( !SV_SP_NormalizeSaveSlotName( resolvedName, baseName, sizeof( baseName ) ) ) {
 		Com_Printf( "save: invalid savegame name '%s'\n", slotName ? slotName : "" );
 		return qfalse;
 	}
@@ -1985,10 +2050,12 @@ Returns qtrue if the save file was valid and the load was initiated.
 */
 qboolean SV_SP_LoadGame( const char *slotName ) {
 	char baseName[MAX_QPATH];
+	char resolvedName[MAX_QPATH];
 	char qpath[MAX_QPATH];
 	char mapName[SP_SAVE_MAP_SIZE];
 	fileHandle_t file;
 	int gameChunkValue;
+	qboolean isRespawn;
 
 	// A load is valid even when no SP game is currently running -- e.g. loading
 	// a save directly from the main menu after a fresh restart, when ge == NULL.
@@ -2004,7 +2071,12 @@ qboolean SV_SP_LoadGame( const char *slotName ) {
 		return qfalse;
 	}
 
-	if ( !SV_SP_NormalizeSaveSlotName( slotName, baseName, sizeof( baseName ) ) ) {
+	// Resolve Raven's '*' special-save names (e.g. the game's "load *respawn"
+	// on death) to a real slot before validating.  isRespawn marks a death
+	// reload so we can fall back to restarting the level if no checkpoint
+	// autosave has been written yet.
+	SV_SP_ResolveSpecialSlotName( slotName, resolvedName, sizeof( resolvedName ), &isRespawn );
+	if ( !SV_SP_NormalizeSaveSlotName( resolvedName, baseName, sizeof( baseName ) ) ) {
 		Com_Printf( "load: invalid savegame name '%s'\n", slotName ? slotName : "" );
 		return qfalse;
 	}
@@ -2015,6 +2087,19 @@ qboolean SV_SP_LoadGame( const char *slotName ) {
 
 	SV_SP_CloseSaveStream( &sv_sp_saveRead );
 	if ( FS_FOpenFileByMode( qpath, &file, FS_READ ) < 0 || !file ) {
+		if ( isRespawn ) {
+			// The player died before any checkpoint autosave existed (e.g. no
+			// target_autosave has fired yet this level).  Rather than leave them
+			// stuck on the death screen, restart the current level fresh so they
+			// respawn at the start.  The map reload restores health, which stops
+			// the game's respawn() from re-issuing this every frame.
+			const char *curMap = Cvar_VariableString( "mapname" );
+			Com_Printf( "load: no checkpoint save yet -- restarting level %s\n", curMap );
+			if ( curMap && curMap[0] ) {
+				Cbuf_ExecuteText( EXEC_APPEND, va( "spmap %s\n", curMap ) );
+				return qtrue;
+			}
+		}
 		Com_Printf( "^1Failed to open savegame %s\n", qpath );
 		return qfalse;
 	}
