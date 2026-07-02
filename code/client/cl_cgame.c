@@ -1045,6 +1045,16 @@ void CL_FirstSnapshot( void ) {
 	}
 	clc.state = CA_ACTIVE;
 
+#ifdef ELITEFORCE
+	// The SP cgame starts its level music back in CG_INIT, while the map is
+	// still loading and the audio mixer isn't pumping steadily -- so it never
+	// became audible without a manual vid_restart.  Now that the session is
+	// active, re-issue the cached track so music plays automatically at start.
+	if ( Cvar_VariableIntegerValue( "sp_game" ) ) {
+		CL_SP_RestartMusic();
+	}
+#endif
+
 	// set the timedelta so we are exactly on this first frame
 	cl.serverTimeDelta = cl.snap.serverTime - cls.realtime;
 	cl.oldServerTime = cl.snap.serverTime;

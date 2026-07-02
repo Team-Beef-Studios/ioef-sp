@@ -606,6 +606,16 @@ void SCR_UpdateScreen( void ) {
 			if ( skippingCin && !wasSkippingCin ) {
 				S_StopAllSounds();
 			}
+#ifdef ELITEFORCE
+			// Falling edge: the skip has finished and we're back to normal
+			// gameplay speed.  The S_StopAllSounds above (or the fast-forward
+			// itself) left the level music silent, so re-issue the cached track
+			// now that the mixer is pumping again -- otherwise skipping the intro
+			// drops you into the game with no music.
+			else if ( !skippingCin && wasSkippingCin && Cvar_VariableIntegerValue( "sp_game" ) ) {
+				CL_SP_RestartMusic();
+			}
+#endif
 			wasSkippingCin = skippingCin;
 		}
 #ifdef BUILD_VR

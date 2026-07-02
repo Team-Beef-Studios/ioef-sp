@@ -170,6 +170,25 @@ static char		s_spSfxName[ SP_MAX_LIP_SFX ][ MAX_QPATH ];
 static int		s_spVoiceStartTime[ MAX_GENTITIES ];
 static sfxHandle_t	s_spVoiceSfx[ MAX_GENTITIES ];
 
+/*
+ * Background-music re-issue cache.
+ *
+ * The SP cgame requests its level music from inside CG_INIT (via
+ * SPCG_S_STARTBACKGROUNDTRACK), i.e. while the client is still loading the
+ * map (clc.state == CA_LOADING/CA_PRIMED) and the audio mixer isn't yet being
+ * pumped steadily.  On that early call the track is opened but never actually
+ * becomes audible -- which is why players historically had to open Video
+ * Options and hit "Apply": vid_restart re-runs CG_INIT while the session is
+ * already CA_ACTIVE, and that second, well-timed call is what made the music
+ * play.
+ *
+ * We remove the manual step by remembering the last requested track here and
+ * re-issuing it automatically once the session first goes active
+ * (CL_FirstSnapshot), reproducing the vid_restart timing without the restart.
+ */
+static char		s_spMusicIntro[ MAX_QPATH ];
+static char		s_spMusicLoop[ MAX_QPATH ];
+
 static cvar_t	*s_lipThreshold[4];
 static cvar_t	*s_lipSync;
 
@@ -384,6 +403,23 @@ static void CL_SP_NoteVoiceSound( int entnum, int channel, sfxHandle_t sfx ) {
 		s_spVoiceSfx[ entnum ]       = sfx;
 		CL_SP_BuildLipSync( sfx );       // lazy, cached
 	}
+}
+
+/*
+ * Re-issue the level's background music once the session goes active.
+ *
+ * Called from CL_FirstSnapshot (the CA_ACTIVE transition) for SP.  The SP
+ * cgame's original music request happens during CG_INIT, too early for the
+ * audio mixer to make it audible; here we replay the cached track with the
+ * whole client up and pumping -- exactly the state a manual vid_restart used
+ * to leave things in, minus the restart.  No-op if the cgame never requested
+ * a track (or requested silence), so it can't spuriously start music.
+ */
+void CL_SP_RestartMusic( void ) {
+	if ( !s_spMusicIntro[0] ) {
+		return;
+	}
+	S_StartBackgroundTrack( s_spMusicIntro, s_spMusicLoop[0] ? s_spMusicLoop : NULL );
 }
 
 /*
@@ -670,10 +706,20 @@ intptr_t CL_SPCgameSystemCalls( intptr_t *args ) {
 		   (e.g., during transitions between cinematic and gameplay).
 		   A non-empty string starts a new background music track; arg 2 is
 		   the loop portion filename (or NULL to loop the whole track). */
-		if ( !VMA(1) || !*((char *) VMA(1)) )
+		if ( !VMA(1) || !*((char *) VMA(1)) ) {
+			s_spMusicIntro[0] = '\0';
+			s_spMusicLoop[0] = '\0';
 			S_StopBackgroundTrack();
-		else
+		} else {
+			// Remember the track so CL_SP_RestartMusic can re-issue it once the
+			// session is actually active (see the cache comment above).
+			Q_strncpyz( s_spMusicIntro, (const char *) VMA(1), sizeof( s_spMusicIntro ) );
+			if ( VMA(2) && *((char *) VMA(2)) )
+				Q_strncpyz( s_spMusicLoop, (const char *) VMA(2), sizeof( s_spMusicLoop ) );
+			else
+				s_spMusicLoop[0] = '\0';
 			S_StartBackgroundTrack( VMA(1), VMA(2) );
+		}
 		return 0;
 
 	// --- force feedback (stubs) ---
