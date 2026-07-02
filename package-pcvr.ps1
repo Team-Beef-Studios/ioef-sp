@@ -130,6 +130,10 @@ if ($strays) { $strays | Remove-Item -Force; Write-Warning "Removed stray .pk3 f
 #                         headset itself is the real view
 # There is deliberately no "+map" here -- launching lands on the SP main menu so
 # the user can start a New Game, Load a save, or change Options.
+# Also re-asserts the engine's tuned texture/LOD defaults (anisotropic filtering,
+# picmip, texture filtering mode, gamma, LOD curve/bias, subdivisions) here, so a
+# stale q3config.cfg/autoexec.cfg left over in the dev build dir can't shadow the
+# compiled-in defaults in the packaged distribution.
 $autoexecPath = Join-Path $stageBaseEF 'autoexec.cfg'
 $vrDefaults = @"
 
@@ -140,6 +144,16 @@ $vrDefaults = @"
 seta vr_enable 1
 seta vr_supersample 1.1
 seta r_fullscreen 0
+
+// ---- Tuned texture/LOD defaults (added by package-pcvr.ps1) ----
+seta r_ext_texture_filter_anisotropic 1
+seta r_ext_max_anisotropy 2
+seta r_textureMode GL_LINEAR_MIPMAP_LINEAR
+seta r_gamma 0.810345
+seta r_picmip 0
+seta r_lodCurveError 500
+seta r_subdivisions 1
+seta r_lodbias -2
 "@
 if (Test-Path $autoexecPath) {
     Add-Content -Path $autoexecPath -Value $vrDefaults -Encoding ASCII
