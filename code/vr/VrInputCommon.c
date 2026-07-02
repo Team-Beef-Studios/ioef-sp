@@ -728,8 +728,11 @@ void VR_HandleControllerInput()
 		}
 	}
 
-	// HUD + gun toggle: click the LEFT thumbstick to hide both the 2D HUD and
-	// the weapon viewmodel for an unobstructed view; click again to restore.
+	// HUD + gun toggle: click the LEFT thumbstick to cycle through three view
+	// states for an unobstructed view; click again to advance.  Cycle order is:
+	//   0: Gun + HUD on   (cg_drawGun 1, cg_draw2D 1)
+	//   1: Gun only       (cg_drawGun 1, cg_draw2D 0)
+	//   2: Gun + HUD off  (cg_drawGun 0, cg_draw2D 0)
 	// Always the physical left controller (independent of handedness, since the
 	// click is separate from the stick's analog X/Y and never disturbs
 	// movement/turn).  Edge-detected on the press; routed through the cgame's
@@ -742,12 +745,20 @@ void VR_HandleControllerInput()
 		qboolean hudWas = (leftTrackedRemoteState_old.Buttons & xrButton_LThumb) != 0;
 		if (hudNow && !hudWas)
 		{
-			static qboolean hudHidden = qfalse;
-			hudHidden = !hudHidden;
-			if (hudHidden)
+			static int hudState = 0;
+			hudState = (hudState + 1) % 3;
+			switch (hudState)
+			{
+			case 1:
+				Cbuf_AddText("cg_draw2D 0; cg_drawGun 1\n");
+				break;
+			case 2:
 				Cbuf_AddText("cg_draw2D 0; cg_drawGun 0\n");
-			else
+				break;
+			default:
 				Cbuf_AddText("cg_draw2D 1; cg_drawGun 1\n");
+				break;
+			}
 		}
 	}
 
