@@ -161,6 +161,7 @@ disabled by default and must be set in the config to take effect.
 |-----|--------|
 | [`CLAUDE.md`](CLAUDE.md) | Architecture, the SP bridge, struct-layout differences, build flags, known stubs. **The primary engineering reference.** |
 | [`BUILD.md`](BUILD.md) | Full PC VR build/deploy/debug walkthrough and troubleshooting. |
+| [`CONTROLS.md`](CONTROLS.md) | VR controller scheme — button/axis-to-action mapping for both hands. |
 | [`android/README.md`](android/README.md) | Standalone Quest/Pico build, OpenXR loader, sideloading. |
 | [`README-ioquake3.md`](README-ioquake3.md) | Upstream ioquake3 readme (cvar/command reference, modding, lineage). |
 | [`opengl2-readme.md`](opengl2-readme.md) | The optional modern GL2 renderer. |
