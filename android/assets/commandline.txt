@@ -1,0 +1,1 @@
++set fs_basepath /sdcard/EFXR +set fs_homepath /sdcard/EFXR +set fs_game baseEF +set com_basegame baseEF +set sp_game 1 +set logfile 2
