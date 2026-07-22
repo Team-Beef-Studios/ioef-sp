@@ -115,8 +115,24 @@ foreach ($f in $optionalRoot)   { Stage-File $BuildDir   $f $stage       $false 
 foreach ($f in $requiredBaseEF) { Stage-File $baseEFDir  $f $stageBaseEF $true  | Out-Null }
 foreach ($f in $optionalBaseEF) { Stage-File $baseEFDir  $f $stageBaseEF $false | Out-Null }
 
-# Safety net: make absolutely sure no game data slipped in.
-$strays = Get-ChildItem -Path $stage -Recurse -Include '*.pk3' -ErrorAction SilentlyContinue
+# --- VR asset pk3 ------------------------------------------------------------
+# Non-retail art the VR code needs (currently the selector-wheel save/load
+# icons).  Built from the SAME source tree the Android APK packs
+# (android/z_vr_assets_base), so the two platforms can't drift.  The 'z_' prefix
+# makes the engine load it last, on top of the retail paks.
+$vrAssetSrc = Join-Path $scriptDir 'android\z_vr_assets_base'
+if (Test-Path $vrAssetSrc) {
+    $vrPk3 = Join-Path $stageBaseEF 'z_vr_assets_base.pk3'
+    Compress-Archive -Path (Join-Path $vrAssetSrc '*') -DestinationPath $vrPk3 -CompressionLevel Optimal
+    Write-Host '  + baseEF/z_vr_assets_base.pk3 (VR art)'
+} else {
+    Write-Warning "VR asset source not found: $vrAssetSrc -- wheel icons will be missing."
+}
+
+# Safety net: make absolutely sure no RETAIL game data slipped in.  Our own
+# z_vr_assets_base.pk3 (built just above) is the one pk3 that belongs here.
+$strays = Get-ChildItem -Path $stage -Recurse -Include '*.pk3' -ErrorAction SilentlyContinue |
+          Where-Object { $_.Name -ne 'z_vr_assets_base.pk3' }
 if ($strays) { $strays | Remove-Item -Force; Write-Warning "Removed stray .pk3 file(s) from package." }
 
 # --- Bake the VR launch defaults into the packaged autoexec.cfg -------------

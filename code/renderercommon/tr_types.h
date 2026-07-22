@@ -145,6 +145,18 @@ typedef struct {
 	float		shaderTexCoord[2];	// texture coordinates used by tcMod entity modifiers
 	float		shaderTime;			// subtracted from refdef time to control effect start times
 
+#ifdef ELITEFORCE
+	/*
+	 * The SP game DLL's refEntity_t has lightDir here (Raven's per-entity
+	 * lighting direction, set by e.g. the flashlight in cg_players.cpp).
+	 * The ioEF renderer ignores it, but it MUST occupy space: without it
+	 * radius/rotation are read 12 bytes early, so every sprite the SP cgame
+	 * submitted arrived with radius 0 and drew nothing at all.  Same class of
+	 * fix as clampToEdgeAvailable in glconfig_t above.
+	 */
+	vec3_t		lightDir;
+#endif
+
 	// extra sprite information
 #ifdef ELITEFORCE
 	/*

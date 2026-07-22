@@ -76,8 +76,10 @@ public class LauncherActivity extends Activity {
 		// commandline.txt: only seed it if the user hasn't supplied one.
 		copyAssetFile("commandline.txt", GAME_FOLDER + "/commandline.txt", false);
 		copyAssetFile("hmconfig.cfg", GAME_FOLDER + "/baseEF/hmconfig.cfg", false);
-		// VR overrides pk3: always refresh (force) so updates land.
-		//copyAssetFile("vr_assets_base.pk3", BASE_FOLDER + "/z_vr_assets_base.pk3", true);
+		// VR overrides pk3 (wheel icons etc): always refresh so updates land.  It
+		// must go in the GAME dir alongside the retail paks, and the "z_" prefix
+		// makes it load last so it can override them.
+		copyAssetFile("z_vr_assets_base.pk3", BASE_FOLDER + "/z_vr_assets_base.pk3", true);
 		// NOTE: retail pak0.pk3 / pak3.pk3 are user-sideloaded into baseEF (licensing).
 	}
 

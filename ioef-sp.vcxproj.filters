@@ -242,6 +242,11 @@
     <ClCompile Include="code\sys\sys_main.c"><Filter>code\sys</Filter></ClCompile>
     <ClCompile Include="code\sys\sys_win32.c"><Filter>code\sys</Filter></ClCompile>
     <ClCompile Include="code\ui\ui_syscalls.c"><Filter>code\ui</Filter></ClCompile>
+    <ClCompile Include="code\vr\VrCvars.c"><Filter>code\vr</Filter></ClCompile>
+    <ClCompile Include="code\vr\VrInputCommon.c"><Filter>code\vr</Filter></ClCompile>
+    <ClCompile Include="code\vr\windows\EFXR_SurfaceView.c"><Filter>code\vr\windows</Filter></ClCompile>
+    <ClCompile Include="code\vr\windows\OpenXrInput.c"><Filter>code\vr\windows</Filter></ClCompile>
+    <ClCompile Include="code\vr\windows\TBXR_Common.c"><Filter>code\vr\windows</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="code\botlib\aasfile.h"><Filter>code\botlib</Filter></ClInclude>
@@ -339,6 +344,11 @@
     <ClInclude Include="code\ui\ui_local.h"><Filter>code\ui</Filter></ClInclude>
     <ClInclude Include="code\ui\ui_public.h"><Filter>code\ui</Filter></ClInclude>
     <ClInclude Include="code\ui\ui_shared.h"><Filter>code\ui</Filter></ClInclude>
+    <ClInclude Include="code\vr\VrBase.h"><Filter>code\vr</Filter></ClInclude>
+    <ClInclude Include="code\vr\VrClientInfo.h"><Filter>code\vr</Filter></ClInclude>
+    <ClInclude Include="code\vr\VrCommon.h"><Filter>code\vr</Filter></ClInclude>
+    <ClInclude Include="code\vr\VrCvars.h"><Filter>code\vr</Filter></ClInclude>
+    <ClInclude Include="code\vr\windows\TBXR_Common.h"><Filter>code\vr\windows</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="code\cgame\cg_newdraw.c"><Filter>code\cgame</Filter></None>
@@ -400,28 +410,19 @@
     <None Include="code\ui\ui_main.c"><Filter>code\ui</Filter></None>
     <None Include="code\ui\ui_players.c"><Filter>code\ui</Filter></None>
     <None Include="code\ui\ui_shared.c"><Filter>code\ui</Filter></None>
-    <None Include="code\vr\VrCvars.c"><Filter>code\vr</Filter></None>
-    <None Include="code\vr\VrInputCommon.c"><Filter>code\vr</Filter></None>
+    <None Include="code\vr\android\android_crash.c"><Filter>code\vr\android</Filter></None>
+    <None Include="code\vr\android\android_glimp.c"><Filter>code\vr\android</Filter></None>
     <None Include="code\vr\android\EFXR_AndroidGlue.c"><Filter>code\vr\android</Filter></None>
     <None Include="code\vr\android\EFXR_SurfaceView.c"><Filter>code\vr\android</Filter></None>
     <None Include="code\vr\android\OpenXrInput.c"><Filter>code\vr\android</Filter></None>
-    <None Include="code\vr\android\TBXR_Common.c"><Filter>code\vr\android</Filter></None>
-    <None Include="code\vr\android\android_crash.c"><Filter>code\vr\android</Filter></None>
-    <None Include="code\vr\android\android_glimp.c"><Filter>code\vr\android</Filter></None>
     <None Include="code\vr\android\snd_opensles.c"><Filter>code\vr\android</Filter></None>
-    <None Include="code\vr\windows\EFXR_SurfaceView.c"><Filter>code\vr\windows</Filter></None>
-    <None Include="code\vr\windows\OpenXrInput.c"><Filter>code\vr\windows</Filter></None>
-    <None Include="code\vr\windows\TBXR_Common.c"><Filter>code\vr\windows</Filter></None>
+    <None Include="code\vr\android\TBXR_Common.c"><Filter>code\vr\android</Filter></None>
     <None Include="code\renderergl2\tr_dsa.h"><Filter>code\renderergl2</Filter></None>
     <None Include="code\renderergl2\tr_extramath.h"><Filter>code\renderergl2</Filter></None>
     <None Include="code\renderergl2\tr_extratypes.h"><Filter>code\renderergl2</Filter></None>
     <None Include="code\renderergl2\tr_fbo.h"><Filter>code\renderergl2</Filter></None>
     <None Include="code\renderergl2\tr_local.h"><Filter>code\renderergl2</Filter></None>
     <None Include="code\renderergl2\tr_postprocess.h"><Filter>code\renderergl2</Filter></None>
-    <None Include="code\vr\VrBase.h"><Filter>code\vr</Filter></None>
-    <None Include="code\vr\VrClientInfo.h"><Filter>code\vr</Filter></None>
-    <None Include="code\vr\VrCommon.h"><Filter>code\vr</Filter></None>
-    <None Include="code\vr\VrCvars.h"><Filter>code\vr</Filter></None>
     <None Include="code\vr\android\TBXR_Common.h"><Filter>code\vr\android</Filter></None>
     <None Include="code\vr\openxr\openxr.h"><Filter>code\vr\openxr</Filter></None>
     <None Include="code\vr\openxr\openxr_helpers.h"><Filter>code\vr\openxr</Filter></None>
@@ -432,6 +433,5 @@
     <None Include="code\vr\openxr\openxr_reflection_parent_structs.h"><Filter>code\vr\openxr</Filter></None>
     <None Include="code\vr\openxr\openxr_reflection_structs.h"><Filter>code\vr\openxr</Filter></None>
     <None Include="code\vr\openxr\xr_linear.h"><Filter>code\vr\openxr</Filter></None>
-    <None Include="code\vr\windows\TBXR_Common.h"><Filter>code\vr\windows</Filter></None>
   </ItemGroup>
 </Project>

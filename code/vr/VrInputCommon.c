@@ -121,10 +121,19 @@ turn delta to cl.viewangles[YAW] (same incremental model as the HMD yaw).
 #define EF_BUTTON_ALT_ATTACK    128
 
 /* EF SP weapon ids.  cl.snap.ps.weapon carries the SP value in sp_game mode;
-   do not use ioquake3's stock Q3 weapon enum names here. */
-#define EF_WP_PHASER              1
-#define EF_WP_COMPRESSION_RIFLE   2
-#define EF_WP_IMOD                3
+   do not use ioquake3's stock Q3 weapon enum names here.  Must stay in step with
+   weapons.h in the Elite-Force-VR repo (FIRST_WEAPON .. LAST_VR_WEAPON is the
+   range that is motion-controlled and therefore alignable). */
+#define EF_WP_FIRST               1    /* WP_PHASER      */
+#define EF_WP_LAST_VR            14    /* WP_RED_HYPO    */
+
+/* How long both triggers + both grips must be held to fire the "give all"
+   chord (milliseconds). */
+#define VR_CHEAT_CHORD_HOLD_MS  3000
+
+/* How long ATTACK is held for the inventory wheel's auto-use (milliseconds).
+   Long enough for one shot, short enough to never read as "held down". */
+#define VR_USE_ITEM_HOLD_MS     250
 
 /* Per-frame controller output, read by the engine via the getters below. */
 static int   vr_controllerButtons = 0;      /* OR of EF_BUTTON_* this frame   */
@@ -226,24 +235,35 @@ static void VR_CacheControllerPoses(const ovrTrackedController *pDomTrack,
 
 static qboolean VR_WeaponAlignSupportedWeapon(int weapon)
 {
-	return weapon == EF_WP_PHASER ||
-		weapon == EF_WP_COMPRESSION_RIFLE ||
-		weapon == EF_WP_IMOD;
+	return weapon >= EF_WP_FIRST && weapon <= EF_WP_LAST_VR;
 }
+
+/* Indexed by the SP weapon id, EF_WP_FIRST..EF_WP_LAST_VR (weapons.h order). */
+static const char *vr_weaponAlignNames[] = {
+	"None",                 /*  0 WP_NONE              */
+	"Phaser",               /*  1 */
+	"Compression Rifle",    /*  2 */
+	"IMOD",                 /*  3 */
+	"Scavenger Rifle",      /*  4 */
+	"Stasis Weapon",        /*  5 */
+	"Grenade Launcher",     /*  6 */
+	"Tetrion Disruptor",    /*  7 */
+	"Quantum Burst",        /*  8 */
+	"Dreadnought",          /*  9 */
+	"Proton Gun",           /* 10 */
+	"Tricorder",            /* 11 */
+	"Voyager Hypo",         /* 12 */
+	"Blue Hypo",            /* 13 */
+	"Red Hypo"              /* 14 */
+};
 
 static const char *VR_WeaponAlignName(int weapon)
 {
-	switch (weapon)
+	if (!VR_WeaponAlignSupportedWeapon(weapon))
 	{
-	case EF_WP_PHASER:
-		return "Phaser";
-	case EF_WP_COMPRESSION_RIFLE:
-		return "Compression Rifle";
-	case EF_WP_IMOD:
-		return "IMOD";
-	default:
 		return "Unsupported";
 	}
+	return vr_weaponAlignNames[weapon];
 }
 
 typedef struct {
@@ -463,10 +483,14 @@ void VR_HandleControllerInput()
 {
 	TBXR_UpdateControllers();
 
-	// Reset per-frame outputs.
-	vr_controllerButtons = 0;
-	vr_controllerUpMove  = 0;
-	vr_turnDelta         = 0.0f;
+	// Reset per-frame outputs.  Movement is zeroed here rather than only in the
+	// movement block below so that the paths which return early (menu, weapon
+	// align, an open selector wheel) can't leave the player walking.
+	vr_controllerButtons    = 0;
+	vr_controllerUpMove     = 0;
+	vr_turnDelta            = 0.0f;
+	remote_movementForward  = 0.0f;
+	remote_movementSideways = 0.0f;
 
 	if (vr_control_scheme->integer == WEAPON_ALIGN)
 	{
@@ -484,6 +508,7 @@ void VR_HandleControllerInput()
 	int domFace1, domFace2;   // dominant-hand face buttons (jump, use)
 	int offFace1;             // off-hand face button 1 (hold = mission objectives)
 	int offFace2;             // off-hand face button 2 (toggle in-game menu)
+	int offThumb;             // off-hand thumbstick click (crouch)
 	if (vr_control_scheme->integer == LEFT_HANDED_DEFAULT)
 	{
 		pDom = &leftTrackedRemoteState_new;
@@ -496,6 +521,7 @@ void VR_HandleControllerInput()
 		domFace2 = xrButton_Y;   // use
 		offFace1 = xrButton_A;   // off-hand (right) primary -> mission info
 		offFace2 = xrButton_B;   // off-hand (right) secondary -> menu
+		offThumb = xrButton_RThumb;
 	}
 	else
 	{
@@ -509,6 +535,7 @@ void VR_HandleControllerInput()
 		domFace2 = xrButton_B;   // use
 		offFace1 = xrButton_X;   // off-hand (left) primary -> mission info
 		offFace2 = xrButton_Y;   // off-hand (left) secondary -> menu
+		offThumb = xrButton_LThumb;
 	}
 
 	// Cache the current dominant/off-hand aim poses for the SP modules.  The
@@ -573,7 +600,105 @@ void VR_HandleControllerInput()
 		// way to toggle our in-game menu.
 		VR_MenuButtonKey(pOff, pOffOld, offFace2, K_ESCAPE);
 
+		// A wheel can't stay up behind a menu -- drop it (the cgame's close-out
+		// tick restores the timescale).
+		vr.item_selector = 0;
+
 		// Save state for edge detection next frame, then we're done.
+		rightTrackedRemoteState_old = rightTrackedRemoteState_new;
+		leftTrackedRemoteState_old  = leftTrackedRemoteState_new;
+		return;
+	}
+
+	// ---- Full-loadout chord: hold BOTH triggers + BOTH grips for 3 seconds ----
+	// VR has no console, so this is the in-headset route to the game's own "give
+	// all" cheat (all weapons, ammo to max, health and armour full -- see the game
+	// DLL's Cmd_Give_f).  "spmap" starts a level with sv_cheats 0, so the chord
+	// enables cheats first; the cvar is CVAR_ROM, hence Cvar_Set rather than a
+	// console command.  Cheats stay on until the next map load.
+	// This is evaluated BEFORE the selector wheels: the chord holds both grips, so
+	// checking it afterwards meant a wheel opened first and swallowed the chord.
+	// The four inputs are never held together in normal play, so while the chord
+	// is engaged we suppress the fire/crouch they would otherwise trigger.
+	qboolean cheatChord = qfalse;
+	if (vr_cheat_chord->integer)
+	{
+		const uint32_t chordMask = xrButton_Trigger | xrButton_GripTrigger;
+		static int      chordStart = 0;
+		static qboolean chordFired = qfalse;
+
+		cheatChord =
+			((leftTrackedRemoteState_new.Buttons  & chordMask) == chordMask) &&
+			((rightTrackedRemoteState_new.Buttons & chordMask) == chordMask);
+
+		if (!cheatChord)
+		{
+			chordStart = 0;
+			chordFired = qfalse;
+		}
+		else
+		{
+			int now = Sys_Milliseconds();
+			if (chordStart == 0)
+			{
+				chordStart = now;
+			}
+			else if (!chordFired && (now - chordStart) >= VR_CHEAT_CHORD_HOLD_MS)
+			{
+				chordFired = qtrue;
+				Com_Printf("VR cheat chord: granting full loadout\n");
+				Cvar_Set("sv_cheats", "1");
+				Cbuf_AddText("give all\n");
+			}
+		}
+	}
+
+	// ---- Selector wheels (ported from JKXR VrInputDefault.cpp) ----
+	// Hold the DOMINANT grip for the weapon wheel, the OFF-HAND grip for the
+	// inventory wheel; release commits whatever the controller is pointing at.
+	// vr.item_selector (1 = weapons, 2 = inventory) is read by the cgame, which
+	// draws the wheel and owns the selection; we only open and close it.
+	if (vr_wheels->integer && !cheatChord)
+	{
+		qboolean domGripNow = (pDom->Buttons    & xrButton_GripTrigger) != 0;
+		qboolean domGripWas = (pDomOld->Buttons & xrButton_GripTrigger) != 0;
+		qboolean offGripNow = (pOff->Buttons    & xrButton_GripTrigger) != 0;
+		qboolean offGripWas = (pOffOld->Buttons & xrButton_GripTrigger) != 0;
+
+		if (vr.item_selector == 0)
+		{
+			// Not during a scripted cinematic -- the grips are quiet there and the
+			// player is trying to watch, not shop.
+			if (!vr.cin_camera)
+			{
+				if (domGripNow && !domGripWas)
+					vr.item_selector = 1;
+				else if (offGripNow && !offGripWas)
+					vr.item_selector = 2;
+			}
+		}
+		else if ((vr.item_selector == 1 && !domGripNow) ||
+		         (vr.item_selector == 2 && !offGripNow))
+		{
+			Cbuf_AddText("itemselectorselect\n");
+			vr.item_selector = 0;
+		}
+	}
+	else if (vr.item_selector)
+	{
+		// Wheels disabled, or the player went for the cheat chord (which needs both
+		// grips) -- drop the wheel without committing anything.
+		vr.item_selector = 0;
+	}
+
+	if (vr.item_selector)
+	{
+		// Wheel is up: no gameplay input at all this frame.  The outputs were zeroed
+		// above and VR_InputSuppressed() makes the engine hard-clear the usercmd, so
+		// nothing -- stick, 6DoF lean, or a held key -- can move, crouch or fire the
+		// player while they're choosing.
+		vr.player_moving = qfalse;
+
 		rightTrackedRemoteState_old = rightTrackedRemoteState_new;
 		leftTrackedRemoteState_old  = leftTrackedRemoteState_new;
 		return;
@@ -635,38 +760,16 @@ void VR_HandleControllerInput()
 		while (vr.snapTurn < -180.0f) vr.snapTurn += 360.0f;
 	}
 
-	// ---- Weapon switch: turn-hand (primary) thumbstick Y -> next/prev weapon ----
-	// Temporary mapping until a weapon wheel.  Turning only uses the stick's X,
-	// so its Y is free: push UP = weapnext, DOWN = weapprev.  Edge-detected (one
-	// switch per flick; re-arms when the stick returns toward centre), same model
-	// as snap-turn.  Routed through the cgame's existing weapnext/weapprev cmds.
-	{
-		float wy = pTurnStick->y;
-		static qboolean weapReady = qtrue;
-		if (wy > 0.7f)
-		{
-			if (weapReady) { Cbuf_AddText("weapnext\n"); weapReady = qfalse; }
-		}
-		else if (wy < -0.7f)
-		{
-			if (weapReady) { Cbuf_AddText("weapprev\n"); weapReady = qfalse; }
-		}
-		else if (wy > -0.3f && wy < 0.3f)
-		{
-			weapReady = qtrue;
-		}
-	}
-
 	// ---- Buttons ----
 	// Shoot: dominant-hand trigger.
-	if (pDom->Buttons & xrButton_Trigger)
+	if ((pDom->Buttons & xrButton_Trigger) && !cheatChord)
 	{
 		vr_controllerButtons |= EF_BUTTON_ATTACK;
 	}
 
 	// Secondary / alt fire: off-hand trigger.  (Dominant trigger = primary fire,
 	// off-hand trigger = alt fire -- the off-hand trigger is otherwise unused.)
-	if (pOff->Buttons & xrButton_Trigger)
+	if ((pOff->Buttons & xrButton_Trigger) && !cheatChord)
 	{
 		vr_controllerButtons |= EF_BUTTON_ALT_ATTACK;
 	}
@@ -690,11 +793,28 @@ void VR_HandleControllerInput()
 		vr_controllerButtons |= EF_BUTTON_USE;
 	}
 
-	// Crouch: off-hand grip (squeeze) -> upmove -127.  Takes priority over jump
-	// only if jump isn't pressed (jump already set upmove to +127 above).
-	if ((pOff->Buttons & xrButton_GripTrigger) && vr_controllerUpMove == 0)
+	// Crouch: click the off-hand thumbstick to TOGGLE crouch.  (The off-hand grip
+	// used to do this as a hold; it now opens the inventory wheel, and holding a
+	// stick click down through a firefight was awkward anyway.)  Jumping stands
+	// you back up, which is what you'd reach for instinctively.
 	{
-		vr_controllerUpMove = -127;
+		static qboolean crouchToggled = qfalse;
+		qboolean crouchNow = (pOff->Buttons    & offThumb) != 0;
+		qboolean crouchWas = (pOffOld->Buttons & offThumb) != 0;
+
+		if (crouchNow && !crouchWas && !cheatChord)
+		{
+			crouchToggled = !crouchToggled;
+		}
+
+		if (vr_controllerUpMove > 0)
+		{
+			crouchToggled = qfalse;   // jump cancels the toggle
+		}
+		else if (crouchToggled && !cheatChord)
+		{
+			vr_controllerUpMove = -127;
+		}
 	}
 
 	// Mission objectives: HOLD the off-hand face button 1 to show the mission-info
@@ -728,36 +848,34 @@ void VR_HandleControllerInput()
 		}
 	}
 
-	// HUD + gun toggle: click the LEFT thumbstick to cycle through three view
-	// states for an unobstructed view; click again to advance.  Cycle order is:
-	//   0: Gun + HUD on   (cg_drawGun 1, cg_draw2D 1)
-	//   1: Gun only       (cg_drawGun 1, cg_draw2D 0)
-	//   2: Gun + HUD off  (cg_drawGun 0, cg_draw2D 0)
-	// Always the physical left controller (independent of handedness, since the
-	// click is separate from the stick's analog X/Y and never disturbs
-	// movement/turn).  Edge-detected on the press; routed through the cgame's
-	// cg_draw2D / cg_drawGun cvars (both CVAR_ARCHIVE, default 1).
-	// Off by default; gated behind the vr_hud_toggle cvar (set it in the config
-	// to enable this development utility).
-	if (vr_hud_toggle->integer)
+	// Auto-use: the cgame raises vr.use_item after the inventory wheel equips a
+	// one-shot item (a hypo) and the playerstate confirms the switch, so the item
+	// is used the moment it's selected rather than needing a separate trigger
+	// pull.  We hold ATTACK while it's set and clear it ourselves after a short
+	// window, so a stale flag can never latch fire on.
 	{
-		qboolean hudNow = (leftTrackedRemoteState_new.Buttons & xrButton_LThumb) != 0;
-		qboolean hudWas = (leftTrackedRemoteState_old.Buttons & xrButton_LThumb) != 0;
-		if (hudNow && !hudWas)
+		static int useItemStart = 0;
+
+		if (!vr.use_item)
 		{
-			static int hudState = 0;
-			hudState = (hudState + 1) % 3;
-			switch (hudState)
+			useItemStart = 0;
+		}
+		else
+		{
+			int now = Sys_Milliseconds();
+			if (useItemStart == 0)
 			{
-			case 1:
-				Cbuf_AddText("cg_draw2D 0; cg_drawGun 1\n");
-				break;
-			case 2:
-				Cbuf_AddText("cg_draw2D 0; cg_drawGun 0\n");
-				break;
-			default:
-				Cbuf_AddText("cg_draw2D 1; cg_drawGun 1\n");
-				break;
+				useItemStart = now;
+			}
+
+			if ((now - useItemStart) < VR_USE_ITEM_HOLD_MS)
+			{
+				vr_controllerButtons |= EF_BUTTON_ATTACK;
+			}
+			else
+			{
+				vr.use_item  = qfalse;
+				useItemStart = 0;
 			}
 		}
 	}
@@ -792,4 +910,12 @@ int VR_GetControllerUpMove(void)
 float VR_GetTurnDelta(void)
 {
 	return vr_turnDelta;
+}
+
+// True while a selector wheel is up.  CL_FinishMove hard-clears the usercmd on
+// this, rather than merely skipping the VR contributions -- otherwise a held key
+// or the 6DoF lean would still move, crouch or fire the player mid-wheel.
+qboolean VR_InputSuppressed(void)
+{
+	return (qboolean)(vr.item_selector != 0);
 }

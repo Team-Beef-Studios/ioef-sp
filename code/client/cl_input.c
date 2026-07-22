@@ -626,7 +626,14 @@ void CL_FinishMove( usercmd_t *cmd ) {
 	// any keyboard/stick movement already in the cmd.  The motion-controller
 	// thumbstick movement, jump/crouch (upmove) and shoot/use buttons are layered
 	// in here too (the VR layer computed them in VR_HandleControllerInput).
-	if ( VR_IsActive() ) {
+	if ( VR_IsActive() && VR_InputSuppressed() ) {
+		// A selector wheel is up: the player is choosing, not playing.  Clear the
+		// whole movement/action part of the command so nothing leaks through.
+		cmd->forwardmove = 0;
+		cmd->rightmove   = 0;
+		cmd->upmove      = 0;
+		cmd->buttons     = 0;
+	} else if ( VR_IsActive() ) {
 		float vrForward = 0.0f, vrSide = 0.0f;
 		float ctlForward = 0.0f, ctlSide = 0.0f;
 		int   ctlUpMove, ctlButtons;

@@ -22,11 +22,26 @@ Elite-Force-VR checkout — see `jni/EFGame/`).
 3. `local.properties` with `sdk.dir=...` (Android Studio writes this).
 
 ## Build
+The gradle **wrapper script/jar is not checked in** (only
+`gradle/wrapper/gradle-wrapper.properties`), so build from Android Studio, or
+invoke a local Gradle 8.5 directly:
 ```
 cd android
-./gradlew assembleDebug
+gradle assembleDebug          # or: Build > Make Project in Android Studio
 adb install -r build/outputs/apk/debug/efxr-debug.apk
 ```
+`assembleDebug` runs ndk-build for all five `.so` (engine + gl4es + OpenXR loader
++ the two SP modules from the sibling Elite-Force-VR checkout).
+
+The debug APK is signed with the auto-generated `~/.android/debug.keystore`, so
+it **cannot update a release-signed install in place** — `adb install` fails with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE`. Either `adb uninstall com.teambeefvr.efxr`
+first (game data and saves live in `/sdcard/EFXR/` and survive), or sign the
+release build with the same key as the installed one.
+
+For a native-only iteration loop (no Android Studio rebuild), run `ndk-build`
+directly and then `tools/repack-install.ps1`, which swaps the fresh `.so` into
+the last debug APK, re-signs and installs it.
 
 ## Game data (on device)
 Sideload the retail paks to `/sdcard/EFXR/baseEF/` (`pak0.pk3`, `pak3.pk3`, …).
@@ -44,14 +59,17 @@ backend commands are replayed into both OpenXR eye buffers with per-eye
 projection and IPD. This is intended to reduce CPU/frontend work; it is not GL
 multiview and still draws each eye separately.
 
-The first motion-controlled weapons are Phaser, Compression Rifle and IMOD. The
-Android build uses the same Elite-Force-VR source and the same archived
-alignment cvars as PCVR:
+Every weapon the player carries is motion-controlled, plus the tricorder and
+hypos (`FIRST_WEAPON`..`LAST_VR_WEAPON`). The Android build uses the same
+Elite-Force-VR source and the same archived alignment cvars as PCVR, one per
+weapon index:
 
 ```
-vr_weapon_adjustment_1  # WP_PHASER
-vr_weapon_adjustment_2  # WP_COMPRESSION_RIFLE
-vr_weapon_adjustment_3  # WP_IMOD
+vr_weapon_adjustment_1   # WP_PHASER
+vr_weapon_adjustment_2   # WP_COMPRESSION_RIFLE
+vr_weapon_adjustment_3   # WP_IMOD
+...
+vr_weapon_adjustment_14  # WP_RED_HYPO
 ```
 
 Each value is `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll`. Defaults are
@@ -65,6 +83,11 @@ standalone as well as PCVR. Enter/exit with the off-hand primary button; use
 dominant stick left/right to select a field, dominant stick up/down to adjust,
 dominant stick click to zero, and A/B to switch weapon. Values are written
 immediately to `vr_weapon_adjustment_N`.
+
+## Controls
+Identical to PCVR — see [`../CONTROLS.md`](../CONTROLS.md). Note the grips are
+the **selector wheels** (dominant = weapons, off-hand = inventory/quick menu),
+so **crouch is the off-hand thumbstick click**, not the grip.
 
 ## Status
 - **M3a** (this): gradle/ndk scaffolding + engine `.so` build files + engine

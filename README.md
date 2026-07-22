@@ -26,9 +26,12 @@ and adds:
   once and replays the renderer backend into both eyes. This is shared by PC VR
   and Android, and is not GL multiview.
 - **Motion-controller input** — thumbstick locomotion, snap/smooth turn, trigger
-  fire, grip crouch, face-button jump/use, and a laser-pointer for menus.
-- **Motion-controlled weapons** — Phaser, Compression Rifle and IMOD render at
-  the dominant controller and fire from the controller muzzle direction in VR.
+  fire, stick-click crouch, face-button jump/use, and a laser-pointer for menus.
+- **Radial weapon & inventory wheels** — hold a grip for a JKXR-style selector
+  wheel of 3D weapon models, with time dilation while it's open.
+- **Motion-controlled weapons** — every weapon the player carries, plus the
+  tricorder and hypos, renders at the dominant controller and fires along the
+  controller's muzzle direction.
 - **Two delivery targets:**
   - **PC VR** (SteamVR / Oculus / WMR / Pico via OpenXR) — native Windows x86_64.
   - **Standalone Android** (Meta Quest, Pico) — arm64 `.apk`.
@@ -133,12 +136,17 @@ This reduces CPU/frontend work; it still draws each eye separately and is not a
 GL4ES/OpenGL multiview path. Virtual-screen menus/cinematics and flat non-VR
 rendering remain separate paths.
 
-The first motion-controlled weapons are `WP_PHASER`, `WP_COMPRESSION_RIFLE` and
-`WP_IMOD`. Their per-weapon alignment cvars live in the Elite-Force-VR cgame:
-`vr_weapon_adjustment_1`, `vr_weapon_adjustment_2` and `vr_weapon_adjustment_3`.
-The value format follows JKXR: `scale,offsetX,offsetY,offsetZ,pitch,yaw,roll`.
-Defaults are tuned in the Elite-Force-VR source and can be adjusted manually
-in-headset. The shared engine-side `vr_weapon_pitchadjust` cvar applies a global
+Everything the player can hold is motion-controlled -- `FIRST_WEAPON`
+(`WP_PHASER`) through `LAST_VR_WEAPON` (`WP_RED_HYPO`), which takes in the
+tricorder and all three hypos as well as the weapons. Aiming is generic:
+`FireWeapon` runs every weapon through `G_VRCalculateWeaponAim`, so a projectile
+weapon needs no per-weapon work.
+Each has an archived alignment cvar in the Elite-Force-VR cgame,
+`vr_weapon_adjustment_N` where N is the weapon index (1 = phaser ... 14 = red
+hypo). The value format follows JKXR:
+`scale,offsetX,offsetY,offsetZ,pitch,yaw,roll`. The phaser, compression rifle
+and IMOD ship with tuned defaults; the rest start neutral and are aligned
+in-headset with the alignment utility below. The shared engine-side `vr_weapon_pitchadjust` cvar applies a global
 controller aim pitch bias before those per-weapon adjustments; its default is
 `-20.0`, matching JKXR.
 Set `vr_align_weapons 1` to enable the JKXR-style live alignment utility. Press
@@ -147,11 +155,27 @@ select and adjust fields, click the stick to zero the selected field, use A/B to
 switch weapons, and press the off-hand primary button again to exit. Edits are
 written immediately to the active weapon's `vr_weapon_adjustment_N` cvar.
 
-Set `vr_hud_toggle 1` (default `0`, off) to enable a development utility that
-hides the view for unobstructed inspection: clicking the **left thumbstick**
-toggles the 2D HUD and the weapon viewmodel off, and clicking it again restores
-them (routed through the cgame's `cg_draw2D` / `cg_drawGun` cvars). It is
-disabled by default and must be set in the config to take effect.
+**Selector wheels** (`vr_wheels 1`, on by default) replace blind weapon cycling.
+Hold the **dominant grip** for a radial wheel of your weapons, or the **off-hand
+grip** for the inventory wheel — the tricorder and hypos plus Quick Save, Quick
+Load and a Mission Objectives toggle. The wheel hangs in front of that hand;
+point with it and release the grip to take the highlighted slot, or release with
+nothing highlighted to cancel. Each slot shows the item's own model,
+auto-sized so every weapon reads at the same size (`vr_wheel_modelscale`
+multiplies it) and turning slowly so you can see it from every angle. Time slows
+to `vr_wheel_timescale` (0.22) while a wheel is up. Releasing on a hypo uses it
+immediately; a weapon you're out of ammo for stays on the ring greyed out. This
+is a port of JKXR's item selector; see [`CONTROLS.md`](CONTROLS.md).
+
+Note that the off-hand **grip** therefore no longer crouches — crouch is the
+off-hand **thumbstick click**, and it now **toggles** (jumping cancels it).
+
+Holding **both triggers and both grips together for 3 seconds** grants the full
+loadout — all weapons, ammo to max, full health and armour — by running the
+game's own `give all` cheat (VR has no console, so this is the in-headset route
+to it). It enables cheats for the rest of the level, and suppresses fire/crouch
+while the four inputs are held so it doesn't empty a clip. Set
+`vr_cheat_chord 0` to disable it. See [`CONTROLS.md`](CONTROLS.md).
 
 ---
 
@@ -162,6 +186,7 @@ disabled by default and must be set in the config to take effect.
 | [`CLAUDE.md`](CLAUDE.md) | Architecture, the SP bridge, struct-layout differences, build flags, known stubs. **The primary engineering reference.** |
 | [`BUILD.md`](BUILD.md) | Full PC VR build/deploy/debug walkthrough and troubleshooting. |
 | [`CONTROLS.md`](CONTROLS.md) | VR controller scheme — button/axis-to-action mapping for both hands. |
+| [`TODO.md`](TODO.md) | Engineering backlog for this port. (The extensionless `TODO` is upstream ioquake3's.) |
 | [`android/README.md`](android/README.md) | Standalone Quest/Pico build, OpenXR loader, sideloading. |
 | [`README-ioquake3.md`](README-ioquake3.md) | Upstream ioquake3 readme (cvar/command reference, modding, lineage). |
 | [`opengl2-readme.md`](opengl2-readme.md) | The optional modern GL2 renderer. |

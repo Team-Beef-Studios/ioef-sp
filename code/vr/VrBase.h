@@ -59,6 +59,7 @@ void     VR_GetControllerMove( float *forward, float *side );
 int      VR_GetControllerButtons( void );
 int      VR_GetControllerUpMove( void );
 float    VR_GetTurnDelta( void );
+qboolean VR_InputSuppressed( void );   /* a selector wheel owns the input */
 
 /* ---- OpenXR frame driver (reusable TBXR layer) ---- */
 void     TBXR_FrameSetup( void );          /* xrWaitFrame + xrBeginFrame + pose update */

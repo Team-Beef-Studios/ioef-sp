@@ -23,7 +23,10 @@ cvar_t	*vr_turn_angle;
 cvar_t	*vr_switch_sticks;
 cvar_t	*vr_weapon_pitchadjust;
 cvar_t	*vr_align_weapons;
-cvar_t	*vr_hud_toggle;
+cvar_t	*vr_cheat_chord;
+cvar_t	*vr_wheels;
+cvar_t	*vr_wheel_timescale;
+cvar_t	*vr_wheel_modelscale;
 
 void VR_InitCvars(void)
 {
@@ -57,8 +60,15 @@ void VR_InitCvars(void)
 	vr_weapon_pitchadjust    = Cvar_Get( "vr_weapon_pitchadjust", "-20.0", CVAR_ARCHIVE );
 	// Development utility: enables the JKXR-style live weapon alignment mode.
 	vr_align_weapons         = Cvar_Get( "vr_align_weapons", "0", CVAR_ARCHIVE );
-	// Development utility: when 1, clicking the LEFT thumbstick toggles the 2D
-	// HUD and weapon viewmodel off/on for an unobstructed view.  Off by default;
-	// set in the config to enable.
-	vr_hud_toggle            = Cvar_Get( "vr_hud_toggle", "0", CVAR_ARCHIVE );
+	// Hold both triggers + both grips for 3s to grant the full loadout ("give
+	// all": weapons, ammo, health, armour).  Set 0 to disable the chord.
+	vr_cheat_chord           = Cvar_Get( "vr_cheat_chord", "1", CVAR_ARCHIVE );
+	// Radial selector wheels: hold the dominant grip for weapons, the off-hand
+	// grip for inventory.  Set 0 to fall back to stick-flick weapon cycling only.
+	vr_wheels                = Cvar_Get( "vr_wheels", "1", CVAR_ARCHIVE );
+	// Time dilation while a wheel is open (JKXR uses 0.22); 1.0 = no slow-mo.
+	vr_wheel_timescale       = Cvar_Get( "vr_wheel_timescale", "0.22", CVAR_ARCHIVE );
+	// Size multiplier for the wheel slot models.  Each model is first normalised
+	// to a uniform size, so 1.0 is "as intended" regardless of the weapon.
+	vr_wheel_modelscale      = Cvar_Get( "vr_wheel_modelscale", "1.0", CVAR_ARCHIVE );
 }

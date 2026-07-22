@@ -22,13 +22,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <NMakeBuildCommandLine>set MSYSTEM=MINGW64
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make  ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make  ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
     <NMakeReBuildCommandLine>set MSYSTEM=MINGW64
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-release ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make  ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make clean-release ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make  ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
     <NMakeCleanCommandLine>set MSYSTEM=MINGW64
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-release ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make clean-release ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
     <NMakeOutput>build\release-mingw64-x86_64\ioquake3.x86_64.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>ELITEFORCE;BOTLIB;USE_RENDERER_DLOPEN;USE_OPENAL;USE_OPENAL_DLOPEN;USE_CURL;USE_CURL_DLOPEN;USE_VOIP;USE_CODEC_VORBIS;USE_CODEC_OPUS;USE_LOCAL_HEADERS;USE_INTERNAL_JPEG;PRODUCT_VERSION="1.38";ARCH_STRING="x86_64";WIN32;_WIN32;__MINGW32__;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>$(ProjectDir)code;$(ProjectDir)code\qcommon;$(ProjectDir)code\client;$(ProjectDir)code\server;$(ProjectDir)code\renderercommon;$(ProjectDir)code\botlib;$(ProjectDir)code\SDL2\include;$(ProjectDir)code\zlib;$(ProjectDir)code\jpeg-8c;$(ProjectDir)code\libcurl-7.35.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
@@ -36,13 +36,13 @@ C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; m
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <NMakeBuildCommandLine>set MSYSTEM=MINGW64
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
     <NMakeReBuildCommandLine>set MSYSTEM=MINGW64
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make clean-debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
     <NMakeCleanCommandLine>set MSYSTEM=MINGW64
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make clean-debug ARCH=x86_64 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
     <NMakeOutput>build\debug-mingw64-x86_64\ioquake3.x86_64.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>ELITEFORCE;BOTLIB;USE_RENDERER_DLOPEN;USE_OPENAL;USE_OPENAL_DLOPEN;USE_CURL;USE_CURL_DLOPEN;USE_VOIP;USE_CODEC_VORBIS;USE_CODEC_OPUS;USE_LOCAL_HEADERS;USE_INTERNAL_JPEG;PRODUCT_VERSION="1.38";ARCH_STRING="x86_64";WIN32;_WIN32;__MINGW32__;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>$(ProjectDir)code;$(ProjectDir)code\qcommon;$(ProjectDir)code\client;$(ProjectDir)code\server;$(ProjectDir)code\renderercommon;$(ProjectDir)code\botlib;$(ProjectDir)code\SDL2\include;$(ProjectDir)code\zlib;$(ProjectDir)code\jpeg-8c;$(ProjectDir)code\libcurl-7.35.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
@@ -50,13 +50,13 @@ C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; m
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <NMakeBuildCommandLine>set MSYSTEM=MINGW32
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make  ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make  ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
     <NMakeReBuildCommandLine>set MSYSTEM=MINGW32
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-release ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make  ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make clean-release ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make  ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
     <NMakeCleanCommandLine>set MSYSTEM=MINGW32
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-release ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make clean-release ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
     <NMakeOutput>build\release-mingw32-x86\ioquake3.x86.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>ELITEFORCE;BOTLIB;USE_RENDERER_DLOPEN;USE_OPENAL;USE_OPENAL_DLOPEN;USE_CURL;USE_CURL_DLOPEN;USE_VOIP;USE_CODEC_VORBIS;USE_CODEC_OPUS;USE_LOCAL_HEADERS;USE_INTERNAL_JPEG;PRODUCT_VERSION="1.38";ARCH_STRING="x86";WIN32;_WIN32;__MINGW32__;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>$(ProjectDir)code;$(ProjectDir)code\qcommon;$(ProjectDir)code\client;$(ProjectDir)code\server;$(ProjectDir)code\renderercommon;$(ProjectDir)code\botlib;$(ProjectDir)code\SDL2\include;$(ProjectDir)code\zlib;$(ProjectDir)code\jpeg-8c;$(ProjectDir)code\libcurl-7.35.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
@@ -64,13 +64,13 @@ C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; m
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <NMakeBuildCommandLine>set MSYSTEM=MINGW32
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeBuildCommandLine>
     <NMakeReBuildCommandLine>set MSYSTEM=MINGW32
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make clean-debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres &amp;&amp; make debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres -j8"</NMakeReBuildCommandLine>
     <NMakeCleanCommandLine>set MSYSTEM=MINGW32
 set MSYS2_PATH_TYPE=inherit
-C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; make clean-debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
+C:\msys64\usr\bin\bash.exe -lc "cd '/c/DEV/GitHub/Public/ioef-sp' &amp;&amp; make clean-debug ARCH=x86 BUILD_ELITEFORCE=1 BUILD_MISSIONPACK=0 BUILD_SERVER=0 BUILD_GAME_QVM=0 WINDRES=windres"</NMakeCleanCommandLine>
     <NMakeOutput>build\debug-mingw32-x86\ioquake3.x86.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>ELITEFORCE;BOTLIB;USE_RENDERER_DLOPEN;USE_OPENAL;USE_OPENAL_DLOPEN;USE_CURL;USE_CURL_DLOPEN;USE_VOIP;USE_CODEC_VORBIS;USE_CODEC_OPUS;USE_LOCAL_HEADERS;USE_INTERNAL_JPEG;PRODUCT_VERSION="1.38";ARCH_STRING="x86";WIN32;_WIN32;__MINGW32__;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>$(ProjectDir)code;$(ProjectDir)code\qcommon;$(ProjectDir)code\client;$(ProjectDir)code\server;$(ProjectDir)code\renderercommon;$(ProjectDir)code\botlib;$(ProjectDir)code\SDL2\include;$(ProjectDir)code\zlib;$(ProjectDir)code\jpeg-8c;$(ProjectDir)code\libcurl-7.35.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
@@ -296,6 +296,11 @@ C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; m
     <ClCompile Include="code\sys\sys_main.c" />
     <ClCompile Include="code\sys\sys_win32.c" />
     <ClCompile Include="code\ui\ui_syscalls.c" />
+    <ClCompile Include="code\vr\VrCvars.c" />
+    <ClCompile Include="code\vr\VrInputCommon.c" />
+    <ClCompile Include="code\vr\windows\EFXR_SurfaceView.c" />
+    <ClCompile Include="code\vr\windows\OpenXrInput.c" />
+    <ClCompile Include="code\vr\windows\TBXR_Common.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="code\botlib\aasfile.h" />
@@ -393,6 +398,11 @@ C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; m
     <ClInclude Include="code\ui\ui_local.h" />
     <ClInclude Include="code\ui\ui_public.h" />
     <ClInclude Include="code\ui\ui_shared.h" />
+    <ClInclude Include="code\vr\VrBase.h" />
+    <ClInclude Include="code\vr\VrClientInfo.h" />
+    <ClInclude Include="code\vr\VrCommon.h" />
+    <ClInclude Include="code\vr\VrCvars.h" />
+    <ClInclude Include="code\vr\windows\TBXR_Common.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="code\cgame\cg_newdraw.c" />
@@ -454,28 +464,19 @@ C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; m
     <None Include="code\ui\ui_main.c" />
     <None Include="code\ui\ui_players.c" />
     <None Include="code\ui\ui_shared.c" />
-    <None Include="code\vr\VrCvars.c" />
-    <None Include="code\vr\VrInputCommon.c" />
+    <None Include="code\vr\android\android_crash.c" />
+    <None Include="code\vr\android\android_glimp.c" />
     <None Include="code\vr\android\EFXR_AndroidGlue.c" />
     <None Include="code\vr\android\EFXR_SurfaceView.c" />
     <None Include="code\vr\android\OpenXrInput.c" />
-    <None Include="code\vr\android\TBXR_Common.c" />
-    <None Include="code\vr\android\android_crash.c" />
-    <None Include="code\vr\android\android_glimp.c" />
     <None Include="code\vr\android\snd_opensles.c" />
-    <None Include="code\vr\windows\EFXR_SurfaceView.c" />
-    <None Include="code\vr\windows\OpenXrInput.c" />
-    <None Include="code\vr\windows\TBXR_Common.c" />
+    <None Include="code\vr\android\TBXR_Common.c" />
     <None Include="code\renderergl2\tr_dsa.h" />
     <None Include="code\renderergl2\tr_extramath.h" />
     <None Include="code\renderergl2\tr_extratypes.h" />
     <None Include="code\renderergl2\tr_fbo.h" />
     <None Include="code\renderergl2\tr_local.h" />
     <None Include="code\renderergl2\tr_postprocess.h" />
-    <None Include="code\vr\VrBase.h" />
-    <None Include="code\vr\VrClientInfo.h" />
-    <None Include="code\vr\VrCommon.h" />
-    <None Include="code\vr\VrCvars.h" />
     <None Include="code\vr\android\TBXR_Common.h" />
     <None Include="code\vr\openxr\openxr.h" />
     <None Include="code\vr\openxr\openxr_helpers.h" />
@@ -486,7 +487,6 @@ C:\msys64\usr\bin\bash.exe -lc "cd /d/NativeAndroidProjects/ioef-sp &amp;&amp; m
     <None Include="code\vr\openxr\openxr_reflection_parent_structs.h" />
     <None Include="code\vr\openxr\openxr_reflection_structs.h" />
     <None Include="code\vr\openxr\xr_linear.h" />
-    <None Include="code\vr\windows\TBXR_Common.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
