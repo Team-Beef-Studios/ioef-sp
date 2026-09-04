@@ -44,6 +44,9 @@ qboolean VR_UseScreenLayer()
 			// the flat screen for them (NOT gated by vr_immersive_cinematics).
 			(bool)(vr.cin_camera ||
 			vr.misc_camera ||
+			// Patron credits are a flat 2D screen, and are drawn while quitting
+			// from gameplay too -- where clc.state would otherwise say immersive.
+			CL_Patrons_Active() ||
 			clc.demoplaying ||
 			(clc.state == CA_DISCONNECTED) ||
 			(clc.state == CA_CHALLENGING) ||

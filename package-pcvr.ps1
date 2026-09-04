@@ -87,6 +87,11 @@ $requiredBaseEF = @(
 $optionalRoot   = @()
 $optionalBaseEF = @('autoexec.cfg')
 
+# The Gold Patron list ships LOOSE (not inside a pk3) so it can be edited in the
+# installed game without repacking.  Sourced from the repo root, not the build
+# dir, so the shipped list is whatever is committed.
+$patronsSrc = Join-Path $scriptDir 'patrons.txt'
+
 if (-not (Test-Path $BuildDir)) { Fail "Build directory not found: $BuildDir" }
 
 # --- Stage -----------------------------------------------------------------
@@ -114,6 +119,13 @@ foreach ($f in $requiredRoot)   { Stage-File $BuildDir   $f $stage       $true  
 foreach ($f in $optionalRoot)   { Stage-File $BuildDir   $f $stage       $false | Out-Null }
 foreach ($f in $requiredBaseEF) { Stage-File $baseEFDir  $f $stageBaseEF $true  | Out-Null }
 foreach ($f in $optionalBaseEF) { Stage-File $baseEFDir  $f $stageBaseEF $false | Out-Null }
+
+if (Test-Path $patronsSrc) {
+    Copy-Item $patronsSrc -Destination $stageBaseEF -Force
+    Write-Host '  + baseEF/patrons.txt (Gold Patron credits)'
+} else {
+    Write-Warning "patrons.txt not found at $patronsSrc -- the exit credits will be skipped."
+}
 
 # --- VR asset pk3 ------------------------------------------------------------
 # Non-retail art the VR code needs (currently the selector-wheel save/load
@@ -215,6 +227,9 @@ RUNNING
    headset connected.
 2. Double-click ioquake3.x86_64.exe.  It launches straight into VR and lands on
    the main menu -- start a New Game or Load a save from there.
+
+The list of Gold Patrons shown when you quit lives in baseEF\patrons.txt --
+plain text, edit it freely.  Set cl_patronsTime 0 in autoexec.cfg to skip it.
 
 Optional tweaks (edit baseEF\autoexec.cfg):
   * vr_enable 0        run flat in a normal desktop window (no VR)

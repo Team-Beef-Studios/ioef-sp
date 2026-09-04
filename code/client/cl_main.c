@@ -3851,6 +3851,10 @@ void CL_Init( void ) {
 	Cvar_Get( "cl_guid", "", CVAR_USERINFO | CVAR_ROM );
 	CL_UpdateGUID( NULL, 0 );
 
+	// Read the patron list now, while the filesystem is definitely up -- the
+	// screen itself is drawn much later, from Com_Quit_f.
+	CL_Patrons_Init();
+
 	Com_Printf( "----- Client Initialization Complete -----\n" );
 }
 

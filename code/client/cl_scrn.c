@@ -496,6 +496,14 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 
 	re.BeginFrame( stereoFrame );
 
+	// Patron credits own the screen outright on the way out.  Returning here
+	// keeps us out of the UI VM, which matters because "quit" is often issued
+	// FROM that VM -- re-entering it while it is being torn down would crash.
+	if ( CL_Patrons_Active() ) {
+		CL_Patrons_Draw();
+		return;
+	}
+
 	uiFullscreen = (uivm && VM_Call( uivm, UI_IS_FULLSCREEN ));
 
 	// wide aspect ratio screens need to have the sides cleared
@@ -589,7 +597,7 @@ void SCR_UpdateScreen( void ) {
 
 	// If there is no VM, there are also no rendering commands issued. Stop the renderer in
 	// that case.
-	if( uivm || com_dedicated->integer )
+	if( uivm || com_dedicated->integer || CL_Patrons_Active() )
 	{
 		// Cinematic skip (applies in BOTH VR and flat).  When the player hits the
 		// skip button during a scripted cutscene the SP game fast-forwards via

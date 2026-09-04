@@ -564,6 +564,14 @@ void CL_SaveConsoleHistory( void );
 void	SCR_Init (void);
 void	SCR_UpdateScreen (void);
 
+//
+// cl_patrons.c -- Gold Patron credits shown on exit
+//
+void		CL_Patrons_Init( void );
+void		CL_Patrons_Draw( void );
+void		CL_Patrons_ShowAndWait( void );
+qboolean	CL_Patrons_Active( void );
+
 void	SCR_DebugGraph (float value);
 
 int		SCR_GetBigStringWidth( const char *str );	// returns in virtual 640x480 coordinates
@@ -580,6 +588,7 @@ void	SCR_DrawBigStringColor( int x, int y, const char *s, vec4_t color, qboolean
 void    SCR_DrawSmallString( int x, int y, const char *s, float alpha );        // draws a string with embedded color control characters with fade
 #endif
 void	SCR_DrawSmallStringExt( int x, int y, const char *string, float *setColor, qboolean forceColor, qboolean noColorEscape );
+void	SCR_DrawStringExt( int x, int y, float size, const char *string, float *setColor, qboolean forceColor, qboolean noColorEscape );
 void	SCR_DrawSmallChar( int x, int y, int ch );
 
 

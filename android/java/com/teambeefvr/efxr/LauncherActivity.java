@@ -80,6 +80,9 @@ public class LauncherActivity extends Activity {
 		// must go in the GAME dir alongside the retail paks, and the "z_" prefix
 		// makes it load last so it can override them.
 		copyAssetFile("z_vr_assets_base.pk3", BASE_FOLDER + "/z_vr_assets_base.pk3", true);
+		// Gold Patron credits shown on exit: always refresh, so each release ships
+		// the current list rather than keeping whatever the first install left.
+		copyAssetFile("patrons.txt", BASE_FOLDER + "/patrons.txt", true);
 		// NOTE: retail pak0.pk3 / pak3.pk3 are user-sideloaded into baseEF (licensing).
 	}
 
