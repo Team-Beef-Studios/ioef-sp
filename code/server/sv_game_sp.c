@@ -2211,14 +2211,19 @@ static void SV_SP_SetBrushModel( sp_gentity_t *ent, const char *name ) {
 
 // Trace wrapper: forwards to the engine's SV_Trace with capsule=qfalse.
 // SP game module doesn't use capsule collision.
+// EnsureEntityData is mandatory here: some maps (e.g. voy5) trace during
+// ge->Init() before linking any entity, and SV_Trace dereferences
+// SV_GentityNum(passEntityNum) -- NULL until sv.gentities is wired up.
 static void SV_SP_Trace( trace_t *results, const vec3_t start, const vec3_t mins,
 						 const vec3_t maxs, const vec3_t end, int passEntityNum,
 						 int contentmask ) {
+	SV_SP_EnsureEntityData();
 	SV_Trace( results, start, (float *)mins, (float *)maxs, end, passEntityNum,
 			  contentmask, /*capsule*/ qfalse );
 }
 
 static int SV_SP_PointContents( const vec3_t point, int passEntityNum ) {
+	SV_SP_EnsureEntityData();
 	return SV_PointContents( point, passEntityNum );
 }
 

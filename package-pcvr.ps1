@@ -123,7 +123,11 @@ foreach ($f in $optionalBaseEF) { Stage-File $baseEFDir  $f $stageBaseEF $false 
 $vrAssetSrc = Join-Path $scriptDir 'android\z_vr_assets_base'
 if (Test-Path $vrAssetSrc) {
     $vrPk3 = Join-Path $stageBaseEF 'z_vr_assets_base.pk3'
-    Compress-Archive -Path (Join-Path $vrAssetSrc '*') -DestinationPath $vrPk3 -CompressionLevel Optimal
+    # Windows PowerShell 5.1's Compress-Archive rejects any extension but .zip,
+    # so write a .zip and rename it. (A pk3 is just a zip.)
+    $vrZip = [System.IO.Path]::ChangeExtension($vrPk3, 'zip')
+    Compress-Archive -Path (Join-Path $vrAssetSrc '*') -DestinationPath $vrZip -CompressionLevel Optimal
+    Move-Item -LiteralPath $vrZip -Destination $vrPk3 -Force
     Write-Host '  + baseEF/z_vr_assets_base.pk3 (VR art)'
 } else {
     Write-Warning "VR asset source not found: $vrAssetSrc -- wheel icons will be missing."
