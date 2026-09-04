@@ -80,6 +80,15 @@ static int R_CullModel( md3Header_t *header, trRefEntity_t *ent ) {
 	md3Frame_t	*oldFrame, *newFrame;
 	int			i;
 
+	// Never cull the first-person view model.  It is culled against the world
+	// frustum but drawn with the RF_DEPTHHACK projection, so the two disagree at
+	// the edges -- and in VR it is motion-controlled, so it legitimately sits off
+	// the view axis (arm at your side, pointing wide) and would pop out of
+	// existence.  It is one small model, so skipping the test costs nothing.
+	if ( ent->e.renderfx & RF_FIRST_PERSON ) {
+		return CULL_IN;
+	}
+
 	// compute frame pointers
 	newFrame = ( md3Frame_t * ) ( ( byte * ) header + header->ofsFrames ) + ent->e.frame;
 	oldFrame = ( md3Frame_t * ) ( ( byte * ) header + header->ofsFrames ) + ent->e.oldframe;

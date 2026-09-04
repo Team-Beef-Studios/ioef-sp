@@ -1026,6 +1026,18 @@ void TBXR_Recenter() {
 	spaceCreateInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE;
 	OXR(xrCreateReferenceSpace(gAppState.Session, &spaceCreateInfo, &gAppState.StageSpace));
 	ALOGV("Created stage space");
+
+	// The runtime just re-established the tracking origin (the player held the
+	// Meta/menu button).  Our own baselines were measured in the OLD space, so
+	// re-take them:
+	//   maxHeight -- the player's calibrated standing height, otherwise captured
+	//                once at startup and never again.  VR_SetHMDOrientation
+	//                re-captures it when it is zero, later in this same frame.
+	//   take_snap -- forces a fresh hmdposition_snap / hmdorientation_snap, the
+	//                reference the 2D screen quad and menu laser pointer are
+	//                placed against; a stale one leaves the menu off to one side.
+	vr.maxHeight = 0.0f;
+	vr.take_snap = qtrue;
 }
 
 void TBXR_WaitForSessionActive()
