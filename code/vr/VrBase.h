@@ -61,6 +61,11 @@ int      VR_GetControllerUpMove( void );
 float    VR_GetTurnDelta( void );
 qboolean VR_InputSuppressed( void );   /* a selector wheel owns the input */
 
+/* Controller haptics.  Handed to the cgame as vr.HapticEvent; see the event
+   table in VrInputCommon.c. */
+void     VR_HapticEvent( const char *event, int position, int flags, int intensity,
+						 float angle, float yHeight );
+
 /* ---- OpenXR frame driver (reusable TBXR layer) ---- */
 void     TBXR_FrameSetup( void );          /* xrWaitFrame + xrBeginFrame + pose update */
 void     TBXR_prepareEyeBuffer( int eye );

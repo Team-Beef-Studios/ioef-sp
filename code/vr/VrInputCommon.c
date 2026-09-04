@@ -505,10 +505,10 @@ void VR_HandleControllerInput()
 	ovrInputStateTrackedRemote *pDom, *pOff, *pDomOld, *pOffOld;
 	ovrTrackedController       *pDomTrack;   // dominant-hand aim pose (menu pointer)
 	ovrTrackedController       *pOffTrack;   // off-hand aim pose
-	int domFace1, domFace2;   // dominant-hand face buttons (jump, use)
+	int domFace1, domFace2;   // dominant-hand face buttons (jump, alt-fire)
 	int offFace1;             // off-hand face button 1 (hold = mission objectives)
 	int offFace2;             // off-hand face button 2 (toggle in-game menu)
-	int offThumb;             // off-hand thumbstick click (crouch)
+	int domThumb;             // dominant thumbstick click (use)
 	if (vr_control_scheme->integer == LEFT_HANDED_DEFAULT)
 	{
 		pDom = &leftTrackedRemoteState_new;
@@ -518,10 +518,10 @@ void VR_HandleControllerInput()
 		pDomTrack = &leftRemoteTracking_new;
 		pOffTrack = &rightRemoteTracking_new;
 		domFace1 = xrButton_X;   // jump
-		domFace2 = xrButton_Y;   // use
+		domFace2 = xrButton_Y;   // alt fire
 		offFace1 = xrButton_A;   // off-hand (right) primary -> mission info
 		offFace2 = xrButton_B;   // off-hand (right) secondary -> menu
-		offThumb = xrButton_RThumb;
+		domThumb = xrButton_LThumb;
 	}
 	else
 	{
@@ -532,10 +532,10 @@ void VR_HandleControllerInput()
 		pDomTrack = &rightRemoteTracking_new;
 		pOffTrack = &leftRemoteTracking_new;
 		domFace1 = xrButton_A;   // jump
-		domFace2 = xrButton_B;   // use
+		domFace2 = xrButton_B;   // alt fire
 		offFace1 = xrButton_X;   // off-hand (left) primary -> mission info
 		offFace2 = xrButton_Y;   // off-hand (left) secondary -> menu
-		offThumb = xrButton_LThumb;
+		domThumb = xrButton_RThumb;
 	}
 
 	// Cache the current dominant/off-hand aim poses for the SP modules.  The
@@ -715,8 +715,26 @@ void VR_HandleControllerInput()
 		vr.player_moving = (fabs(x) + fabs(y)) > 0.05f;
 
 		float speed = (vr.move_speed == 0 ? 0.75f : (vr.move_speed == 1 ? 1.0f : 0.5f));
-		remote_movementSideways = x * speed;
-		remote_movementForward  = y * speed;
+		float fwd = y * speed;
+		float side = x * speed;
+
+		// Movement orientation.  The engine applies forwardmove/rightmove relative
+		// to cl.viewangles[YAW], i.e. the HMD -- so by default you walk where you
+		// look.  With vr_movement_orientation 1 we pre-rotate the stick vector by
+		// (off-hand yaw - HMD yaw), which makes the off-hand controller steer
+		// movement and frees the head to look around independently.
+		if (vr_movement_orientation->integer == 1)
+		{
+			float d = DEG2RAD(vr.offhandangles[ANGLES_DEFAULT][YAW] - vr.hmdorientation[YAW]);
+			float c = cosf(d), sn = sinf(d);
+			float f2 =  fwd * c + side * sn;
+			float s2 = -fwd * sn + side * c;
+			fwd  = f2;
+			side = s2;
+		}
+
+		remote_movementSideways = side;
+		remote_movementForward  = fwd;
 	}
 
 	// ---- Turn: turn-hand thumbstick X -> yaw (snap or smooth) ----
@@ -751,7 +769,18 @@ void VR_HandleControllerInput()
 		}
 		else if (fabs(turnX) > 0.1f) // smooth turn
 		{
-			vr_turnDelta -= (vr_turn_angle->value / 10.0f) * turnX;
+			// Scaled by real elapsed time, so the turn rate is the same on a 72Hz
+			// standalone headset and a 120Hz PC one.  The 90.0 reproduces the old
+			// per-frame step (vr_turn_angle/10) at 90Hz, leaving that rate's feel
+			// unchanged.  The clamp stops a load hitch from spinning the player.
+			static int lastTurnTime = 0;
+			int   now = Sys_Milliseconds();
+			float dt  = lastTurnTime ? (now - lastTurnTime) / 1000.0f : 0.0f;
+
+			lastTurnTime = now;
+			if (dt > 0.1f) dt = 0.1f;
+
+			vr_turnDelta -= (vr_turn_angle->value / 10.0f) * 90.0f * turnX * dt;
 		}
 
 		// Keep snapTurn in the shared struct in sync (cgame may read it).
@@ -767,13 +796,6 @@ void VR_HandleControllerInput()
 		vr_controllerButtons |= EF_BUTTON_ATTACK;
 	}
 
-	// Secondary / alt fire: off-hand trigger.  (Dominant trigger = primary fire,
-	// off-hand trigger = alt fire -- the off-hand trigger is otherwise unused.)
-	if ((pOff->Buttons & xrButton_Trigger) && !cheatChord)
-	{
-		vr_controllerButtons |= EF_BUTTON_ALT_ATTACK;
-	}
-
 	// Dominant face button 1 (A right / X left):
 	//  - during a scripted cinematic -> BUTTON_USE_HOLDABLE, which the game's
 	//    ClientCinematicThink treats as "skip the cutscene" (a fresh press
@@ -787,20 +809,36 @@ void VR_HandleControllerInput()
 			vr_controllerUpMove = 127;
 	}
 
-	// Use: dominant face button 2 (B right / Y left) -> BUTTON_USE.
+	// Alt fire: dominant face button 2 (B right / Y left).  Both fire controls
+	// sit on the weapon hand, so you never fire the weapon you are aiming with
+	// using the other hand.  The off-hand trigger is deliberately unbound.
 	if (pDom->Buttons & domFace2)
+	{
+		vr_controllerButtons |= EF_BUTTON_ALT_ATTACK;
+	}
+
+	// Use: click the dominant thumbstick.
+	if (pDom->Buttons & domThumb)
 	{
 		vr_controllerButtons |= EF_BUTTON_USE;
 	}
 
-	// Crouch: click the off-hand thumbstick to TOGGLE crouch.  (The off-hand grip
-	// used to do this as a hold; it now opens the inventory wheel, and holding a
-	// stick click down through a firefight was awkward anyway.)  Jumping stands
-	// you back up, which is what you'd reach for instinctively.
+	// Crouch: pull the TURN stick down to TOGGLE crouch.  That stick's Y axis is
+	// otherwise unused (X is turn, and the move stick owns Y), so this keeps both
+	// stick clicks free.  Edge-detected off a deadzone so a diagonal turn does not
+	// trip it.  Jumping stands you back up, which is what you reach for
+	// instinctively.
 	{
-		static qboolean crouchToggled = qfalse;
-		qboolean crouchNow = (pOff->Buttons    & offThumb) != 0;
-		qboolean crouchWas = (pOffOld->Buttons & offThumb) != 0;
+		static qboolean crouchToggled  = qfalse;
+		static qboolean crouchStickDown = qfalse;   // latched, for edge detection
+		qboolean crouchWas = crouchStickDown;
+		qboolean crouchNow;
+
+		// Hysteresis: engage past -0.7, release only above -0.5, so a stick
+		// resting near the threshold cannot chatter the toggle.
+		if (pTurnStick->y < -0.7f)      crouchStickDown = qtrue;
+		else if (pTurnStick->y > -0.5f) crouchStickDown = qfalse;
+		crouchNow = crouchStickDown;
 
 		if (crouchNow && !crouchWas && !cheatChord)
 		{
@@ -918,4 +956,82 @@ float VR_GetTurnDelta(void)
 qboolean VR_InputSuppressed(void)
 {
 	return (qboolean)(vr.item_selector != 0);
+}
+
+
+/*
+================================================================================
+
+Haptic events.
+
+The cgame calls this through vr.HapticEvent (see VrClientInfo.h).  Event names
+describe the CHARACTER of the effect, not the weapon, so the engine stays
+game-agnostic -- the cgame is what knows that, say, the quantum burst is heavy.
+Mirrors JKXR's VR_HapticEvent (JKXR_SurfaceView.cpp).
+
+  event     -- effect name, see the table below
+  position  -- reserved for external haptic hardware
+  flags     -- hand override, 1 = right, 2 = left, 3 = both; 0 = the weapon hand
+  intensity -- 0..100
+  angle     -- reserved for external haptic hardware
+  yHeight   -- reserved for external haptic hardware
+
+================================================================================
+*/
+void VR_HapticEvent( const char *event, int position, int flags, int intensity,
+					 float angle, float yHeight )
+{
+	float fIntensity;
+	int   weaponChannel;
+
+	(void)position; (void)angle; (void)yHeight;   /* external-hardware only */
+
+	if ( !event || !event[0] ) {
+		return;
+	}
+	if ( !vr_haptic_intensity || vr_haptic_intensity->value == 0.0f ) {
+		return;
+	}
+
+	fIntensity = intensity / 100.0f;
+	if ( fIntensity <= 0.0f ) {
+		return;
+	}
+
+	/* Weapon effects land on the weapon hand unless the caller names one. */
+	weaponChannel = ( vr_control_scheme->integer >= LEFT_HANDED_DEFAULT ) ? 2 : 1;
+	if ( flags != 0 ) {
+		weaponChannel = flags;
+	}
+
+	/* ---- weapon fire, by weight ---- */
+	if ( !strcmp( event, "fire_light" ) ) {
+		/* rapid, low-recoil shots -- phaser, tetrion, scavenger */
+		TBXR_Vibrate( 60, weaponChannel, fIntensity );
+	} else if ( !strcmp( event, "fire_medium" ) ) {
+		/* single solid shots -- compression rifle, IMOD, proton */
+		TBXR_Vibrate( 110, weaponChannel, fIntensity );
+	} else if ( !strcmp( event, "fire_heavy" ) ) {
+		/* thump -- grenade launcher, dreadnought */
+		TBXR_Vibrate( 260, weaponChannel, fIntensity );
+	} else if ( !strcmp( event, "fire_charged" ) ) {
+		/* the big ones -- quantum burst, charged sniper shot */
+		TBXR_Vibrate( 400, weaponChannel, fIntensity );
+	} else if ( !strcmp( event, "fire_beam" ) ) {
+		/* continuous beams re-arm this every frame they are on; TBXR_Vibrate
+		   ignores the repeat while one is still running, giving a steady buzz */
+		TBXR_Vibrate( 50, weaponChannel, fIntensity );
+
+	/* ---- feedback that is not weapon fire ---- */
+	} else if ( !strcmp( event, "weapon_switch" ) ) {
+		TBXR_Vibrate( 250, weaponChannel, 0.8f );
+	} else if ( !strcmp( event, "pickup_item" ) ) {
+		TBXR_Vibrate( 100, 3, 1.0f );
+	} else if ( !strcmp( event, "damage" ) ) {
+		TBXR_Vibrate( 200, 3, fIntensity );
+	} else if ( !strcmp( event, "selector_icon" ) ||
+				!strcmp( event, "use_button" ) ) {
+		/* quick blip; the caller names the hand */
+		TBXR_Vibrate( 50, flags ? flags : 3, fIntensity );
+	}
 }

@@ -591,3 +591,109 @@ void TBXR_UpdateControllers( )
     rightTrackedRemoteState_new.Joystick.x = js.currentState.x;
     rightTrackedRemoteState_new.Joystick.y = js.currentState.y;
 }
+
+
+/*
+================================================================================
+
+Haptics.  Ported from JKXR (JKXR/OpenXrInput.cpp TBXR_Vibrate/ProcessHaptics).
+
+TBXR_Vibrate arms a per-hand effect; TBXR_ProcessHaptics runs once a frame from
+TBXR_FrameSetup, re-applies whatever is still running and counts it down.
+
+`chan` is a bitmask over hands: 1 = right, 2 = left, 3 = both.
+
+================================================================================
+*/
+
+/* Indexed by hand: 0 = left, 1 = right (matches handSubactionPath).
+   Duration is milliseconds remaining; -1 means "run until stopped". */
+static float    vibration_channel_duration[SIDE_COUNT]  = { 0.0f, 0.0f };
+static float    vibration_channel_intensity[SIDE_COUNT] = { 0.0f, 0.0f };
+static qboolean vibration_channel_playing[SIDE_COUNT]   = { qfalse, qfalse };
+
+void TBXR_Vibrate( int duration, int chan, float intensity )
+{
+	int i;
+
+	if ( !vr_haptic_intensity || vr_haptic_intensity->value == 0.0f ) {
+		return;
+	}
+
+	for ( i = 0; i < SIDE_COUNT; i++ ) {
+		int hand = 1 - i;   /* bit 1 -> right (index 1), bit 2 -> left (index 0) */
+
+		if ( !( ( i + 1 ) & chan ) ) {
+			continue;
+		}
+		// Let a running effect finish rather than restarting it every frame a
+		// held trigger fires.  (JKXR returns here; we continue, so that a
+		// both-hands request still reaches the idle hand.)
+		if ( vibration_channel_duration[hand] > 0.0f ) {
+			continue;
+		}
+		if ( vibration_channel_duration[hand] == -1.0f && duration != 0.0f ) {
+			continue;
+		}
+
+		vibration_channel_duration[hand]  = (float)duration;
+		vibration_channel_intensity[hand] = intensity * vr_haptic_intensity->value;
+	}
+}
+
+void TBXR_ProcessHaptics( void )
+{
+	static float lastFrameTime = 0.0f;
+	float timestamp = (float)Sys_Milliseconds();
+	float frametime = timestamp - lastFrameTime;
+	int   i;
+
+	lastFrameTime = timestamp;
+
+	if ( !gAppState.Session || !actionSet ) {
+		return;
+	}
+
+	for ( i = 0; i < SIDE_COUNT; i++ ) {
+		XrHapticActionInfo hapticActionInfo = {0};
+
+		hapticActionInfo.type          = XR_TYPE_HAPTIC_ACTION_INFO;
+		hapticActionInfo.next          = NULL;
+		hapticActionInfo.action        = vibrateAction;
+		hapticActionInfo.subactionPath = handSubactionPath[i];
+
+		if ( vibration_channel_duration[i] > 0.0f ||
+			 vibration_channel_duration[i] == -1.0f ) {
+			XrHapticVibration vibration = {0};
+
+			vibration.type      = XR_TYPE_HAPTIC_VIBRATION;
+			vibration.next      = NULL;
+			vibration.amplitude = vibration_channel_intensity[i];
+			// ToXrTime takes SECONDS; our durations are milliseconds.  (JKXR
+			// passes ms straight in, overshooting by 1000x, and relies on the
+			// explicit stop below to cut the effect off.)
+			// A "run until stopped" channel (-1) is re-applied every frame, so it
+			// only needs to outlast one frame; 100ms keeps it smooth and bounds
+			// how long it can hang on if we stop ticking.
+			vibration.duration  = ( vibration_channel_duration[i] == -1.0f )
+								? ToXrTime( 0.1 )
+								: ToXrTime( vibration_channel_duration[i] / 1000.0 );
+			vibration.frequency = XR_FREQUENCY_UNSPECIFIED;
+
+			CHECK_XRCMD( xrApplyHapticFeedback( gAppState.Session, &hapticActionInfo,
+												(const XrHapticBaseHeader *)&vibration ) );
+			vibration_channel_playing[i] = qtrue;
+
+			if ( vibration_channel_duration[i] != -1.0f ) {
+				vibration_channel_duration[i] -= frametime;
+				if ( vibration_channel_duration[i] < 0.0f ) {
+					vibration_channel_duration[i]  = 0.0f;
+					vibration_channel_intensity[i] = 0.0f;
+				}
+			}
+		} else if ( vibration_channel_playing[i] ) {
+			CHECK_XRCMD( xrStopHapticFeedback( gAppState.Session, &hapticActionInfo ) );
+			vibration_channel_playing[i] = qfalse;
+		}
+	}
+}

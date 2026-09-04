@@ -1494,17 +1494,8 @@ void TBXR_submitFrame()
 /*
 ================================================================================
 
-Haptics -- stubbed (RealRTCW implements these in OpenXrInput.c; we leave them
-no-op per the focused input scope).  TBXR_InitActions / TBXR_UpdateControllers
-now live in OpenXrInput.c.
+Haptics, TBXR_InitActions and TBXR_UpdateControllers all live in OpenXrInput.c
+(they need the action handles).
 
 ================================================================================
 */
-
-void TBXR_Vibrate( int duration, int chan, float intensity )
-{
-}
-
-void TBXR_ProcessHaptics()
-{
-}

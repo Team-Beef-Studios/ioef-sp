@@ -134,6 +134,14 @@ typedef struct {
     float       test_scale;
     vec3_t      test_angles;
     vec3_t      test_offset;
+
+    /* ---- haptics ----
+       Set by the engine (VR_Init) and called by the module DLLs.  NULL when the
+       engine was built without VR, so callers must check before calling.
+       event = effect name, flags = hand (1 right / 2 left / 3 both, 0 = weapon
+       hand), intensity = 0..100.  See VR_HapticEvent in VrInputCommon.c. */
+    void        ( *HapticEvent )( const char *event, int position, int flags,
+                                  int intensity, float angle, float yHeight );
 } vr_client_info_t;
 
 #ifndef EFXR_CLIENT

@@ -492,6 +492,9 @@ qboolean VR_Init()
 
 	vr.menu_right_handed = vr_control_scheme->integer == 0;
 
+	// Hand the cgame its route to controller haptics.
+	vr.HapticEvent = VR_HapticEvent;
+
 	return qtrue;
 }
 
@@ -499,15 +502,12 @@ qboolean VR_Init()
 /*
 ================================================================================
 
-Haptics / controller input -- stubbed for M1 (full input layer is a later
-milestone).  Keeping the symbols here so TBXR_Common.c links.
+External-haptics-hardware hooks -- stubbed; we drive the controllers only.
+(The controller effects themselves are VR_HapticEvent in VrInputCommon.c and
+TBXR_Vibrate/TBXR_ProcessHaptics in OpenXrInput.c.)
 
 ================================================================================
 */
-
-void VR_HapticEvent(const char* event, int position, int flags, int intensity, float angle, float yHeight )
-{
-}
 
 void VR_HapticUpdateEvent(const char* event, int intensity, float angle )
 {
