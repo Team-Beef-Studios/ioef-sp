@@ -641,12 +641,32 @@ void CL_FinishMove( usercmd_t *cmd ) {
 		VR_GetPositionalMove( &vrForward, &vrSide );
 		VR_GetControllerMove( &ctlForward, &ctlSide );
 
+		// EF turns "hold Use + strafe" into a lean (bg_pangles.cpp).  The 6DoF
+		// contribution is never zero -- your head swings on your neck as you look
+		// around -- so with Use held it triggers the lean again and again, and the
+		// game's leanStopDebounceTime keeps stripping rightmove and BUTTON_USE
+		// back out.  Drop the positional part while Use is down; a deliberate
+		// stick strafe still leans, which is the feature EF intends.
+		if ( VR_UseButtonHeld() ) {
+			vrForward = 0.0f;
+			vrSide    = 0.0f;
+		}
+
+		// Walk/run comes from the game's own speed key: CL_KeyMove ran above and
+		// has already set BUTTON_WALKING from (in_speed ^ cl_run), capping
+		// keyboard movement at 64 rather than 127.  The thumbstick is the
+		// analogue of those keys, so cap it by the same ratio; the animations,
+		// bob rate and footsteps all follow from the button, not from here.
+		// Physically stepping about (the 6DoF term) is not scaled -- that is the
+		// player actually moving.
+		float moveScale = ( cmd->buttons & BUTTON_WALKING ) ? ( 64.0f / 127.0f ) : 1.0f;
+
 		cmd->forwardmove = ClampChar( cmd->forwardmove
 			+ (int)( vrForward  * 127.0f )
-			+ (int)( ctlForward * 127.0f ) );
+			+ (int)( ctlForward * 127.0f * moveScale ) );
 		cmd->rightmove   = ClampChar( cmd->rightmove
 			+ (int)( vrSide  * 127.0f )
-			+ (int)( ctlSide * 127.0f ) );
+			+ (int)( ctlSide * 127.0f * moveScale ) );
 
 		// Jump / crouch from controller (only override when set, so the keyboard
 		// upmove still works when no VR button is pressed).

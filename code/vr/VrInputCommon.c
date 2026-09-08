@@ -507,8 +507,10 @@ void VR_HandleControllerInput()
 	ovrTrackedController       *pOffTrack;   // off-hand aim pose
 	int domFace1, domFace2;   // dominant-hand face buttons (jump, alt-fire)
 	int offFace1;             // off-hand face button 1 (hold = mission objectives)
+	                          // NB face button 1 moves with vr_switch_sticks (below)
 	int offFace2;             // off-hand face button 2 (toggle in-game menu)
 	int domThumb;             // dominant thumbstick click (use)
+	int offThumb;             // off-hand thumbstick click (walk/run toggle)
 	if (vr_control_scheme->integer == LEFT_HANDED_DEFAULT)
 	{
 		pDom = &leftTrackedRemoteState_new;
@@ -522,6 +524,7 @@ void VR_HandleControllerInput()
 		offFace1 = xrButton_A;   // off-hand (right) primary -> mission info
 		offFace2 = xrButton_B;   // off-hand (right) secondary -> menu
 		domThumb = xrButton_LThumb;
+		offThumb = xrButton_RThumb;
 	}
 	else
 	{
@@ -536,6 +539,36 @@ void VR_HandleControllerInput()
 		offFace1 = xrButton_X;   // off-hand (left) primary -> mission info
 		offFace2 = xrButton_Y;   // off-hand (left) secondary -> menu
 		domThumb = xrButton_RThumb;
+		offThumb = xrButton_LThumb;
+	}
+
+	// Face button 1 travels with the movement stick.  vr_switch_sticks puts the
+	// move stick on the other hand, so jump goes with it and stays next to the
+	// thumb that walks the player.  A left-hander who swaps the sticks then gets
+	// the stock physical layout -- move on the left stick, jump on A -- with the
+	// gun in the left hand.  Right-handed with the swap off is unchanged.
+	//
+	// Only face button 1 moves.  Face button 2 is alt-fire, and both fire
+	// controls stay on the weapon hand by design (see the alt-fire block below),
+	// so B/Y are deliberately left alone.
+	//
+	// A button bit only ever appears on one controller (A/B are right, X/Y are
+	// left), so the controller pointer must travel with the bit.
+	ovrInputStateTrackedRemote *pFace1    = pDom, *pFace1Old    = pDomOld;
+	ovrInputStateTrackedRemote *pOffFace1 = pOff, *pOffFace1Old = pOffOld;
+	if (vr_switch_sticks->integer)
+	{
+		int                         swapBtn = domFace1;
+		ovrInputStateTrackedRemote *swapNew = pFace1;
+		ovrInputStateTrackedRemote *swapOld = pFace1Old;
+
+		domFace1  = offFace1;
+		pFace1    = pOffFace1;
+		pFace1Old = pOffFace1Old;
+
+		offFace1     = swapBtn;
+		pOffFace1    = swapNew;
+		pOffFace1Old = swapOld;
 	}
 
 	// Cache the current dominant/off-hand aim poses for the SP modules.  The
@@ -545,8 +578,8 @@ void VR_HandleControllerInput()
 
 	if (vr_align_weapons->integer)
 	{
-		qboolean alignNow = (pOff->Buttons & offFace1) != 0;
-		qboolean alignWas = (pOffOld->Buttons & offFace1) != 0;
+		qboolean alignNow = (pOffFace1->Buttons & offFace1) != 0;
+		qboolean alignWas = (pOffFace1Old->Buttons & offFace1) != 0;
 		if (alignNow && !alignWas)
 		{
 			vr_previousControlScheme = vr_control_scheme->integer == LEFT_HANDED_DEFAULT ?
@@ -591,7 +624,7 @@ void VR_HandleControllerInput()
 
 		// Click: dominant trigger or face button 1 -> left mouse button.
 		VR_MenuButtonKey(pDom, pDomOld, xrButton_Trigger, K_MOUSE1);
-		VR_MenuButtonKey(pDom, pDomOld, domFace1,         K_MOUSE1);
+		VR_MenuButtonKey(pFace1, pFace1Old, domFace1,     K_MOUSE1);
 		// Menu/back button (either hand) -> Escape (back out / close the menu).
 		VR_MenuButtonKey(&leftTrackedRemoteState_new,  &leftTrackedRemoteState_old,  xrButton_Enter, K_ESCAPE);
 		VR_MenuButtonKey(&rightTrackedRemoteState_new, &rightTrackedRemoteState_old, xrButton_Enter, K_ESCAPE);
@@ -796,12 +829,12 @@ void VR_HandleControllerInput()
 		vr_controllerButtons |= EF_BUTTON_ATTACK;
 	}
 
-	// Dominant face button 1 (A right / X left):
+	// Face button 1 (A right-handed; follows the move stick under vr_switch_sticks):
 	//  - during a scripted cinematic -> BUTTON_USE_HOLDABLE, which the game's
 	//    ClientCinematicThink treats as "skip the cutscene" (a fresh press
 	//    toggles the skip/fast-forward);
 	//  - otherwise -> jump (upmove +127).
-	if (pDom->Buttons & domFace1)
+	if (pFace1->Buttons & domFace1)
 	{
 		if (vr.cin_camera)
 			vr_controllerButtons |= EF_BUTTON_USE_HOLDABLE;
@@ -821,6 +854,24 @@ void VR_HandleControllerInput()
 	if (pDom->Buttons & domThumb)
 	{
 		vr_controllerButtons |= EF_BUTTON_USE;
+	}
+
+	// Walk / run: click the MOVE-hand thumbstick to toggle.  This drives the
+	// engine's own speed key (+speed / -speed, normally shift), so everything
+	// downstream is the stock path: CL_KeyMove sets BUTTON_WALKING against
+	// cl_run, and the game picks its walk animations, bob rate and footstep
+	// behaviour from that bit.  Latched rather than held, so it stays put.
+	{
+		static qboolean speedWas   = qfalse;
+		static qboolean walking    = qfalse;
+		qboolean        speedNow   = (pOff->Buttons & offThumb) != 0;
+
+		if (speedNow && !speedWas && !cheatChord)
+		{
+			walking = (qboolean)!walking;
+			Cbuf_AddText( walking ? "+speed\n" : "-speed\n" );
+		}
+		speedWas = speedNow;
 	}
 
 	// Crouch: pull the TURN stick down to TOGGLE crouch.  That stick's Y axis is
@@ -903,8 +954,8 @@ void VR_HandleControllerInput()
 	// screen -- the cgame '+info'/'-info' commands the desktop binds to a key
 	// (shows while held).  Edge-detected so we issue each command once.
 	{
-		qboolean infoNow = (pOff->Buttons & offFace1) != 0;
-		qboolean infoWas = (pOffOld->Buttons & offFace1) != 0;
+		qboolean infoNow = (pOffFace1->Buttons & offFace1) != 0;
+		qboolean infoWas = (pOffFace1Old->Buttons & offFace1) != 0;
 		if (infoNow && !infoWas)      Cbuf_AddText("+info\n");
 		else if (!infoNow && infoWas) Cbuf_AddText("-info\n");
 	}
@@ -980,6 +1031,14 @@ void VR_GetControllerMove(float *forward, float *side)
 int VR_GetControllerButtons(void)
 {
 	return vr_controllerButtons;
+}
+
+// EF reads "hold Use + strafe" as a lean (bg_pangles.cpp PM_UpdateViewAngles), so
+// CL_FinishMove has to keep 6DoF head motion out of the movement command while
+// this is down.
+qboolean VR_UseButtonHeld(void)
+{
+	return (qboolean)((vr_controllerButtons & EF_BUTTON_USE) != 0);
 }
 
 // +127 jump / -127 crouch / 0 none -- engine writes to cmd->upmove.

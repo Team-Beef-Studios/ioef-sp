@@ -57,6 +57,7 @@ void     VR_GetPositionalMove( float *forward, float *side );
    TurnDelta: yaw degrees to add to cl.viewangles[YAW] (snap/smooth turn). */
 void     VR_GetControllerMove( float *forward, float *side );
 int      VR_GetControllerButtons( void );
+qboolean VR_UseButtonHeld( void );     /* EF turns use+strafe into a lean */
 int      VR_GetControllerUpMove( void );
 float    VR_GetTurnDelta( void );
 qboolean VR_InputSuppressed( void );   /* a selector wheel owns the input */

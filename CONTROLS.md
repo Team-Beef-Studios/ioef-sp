@@ -145,6 +145,32 @@ local player's own weapon rumbles — nearby NPC fire does not.
   (`codeJK2/cgame/cg_weapons.cpp CG_DrawItemSelector`); the cgame half lives in
   `Elite-Force-VR/cgame/cg_weapons.cpp`. The Quick Save / Quick Load icons come
   from JKXR (`z_vr_assets_base/gfx/`), shipped in `z_vr_assets_base.pk3`.
+- **Walk / run** is the OFF-HAND stick click, latched. It drives the engine's own
+  speed key (`+speed` / `-speed`, the desktop shift key), so the stock path does
+  the work: `CL_KeyMove` sets `BUTTON_WALKING` from `in_speed ^ cl_run`, and EF
+  takes its walk animations, bob rate and footstep behaviour from that bit
+  (`bg_pmove.cpp`). `CL_FinishMove` caps the thumbstick at 64/127 when the bit is
+  set, matching what `CL_KeyMove` does to the movement keys. Physical 6DoF
+  stepping is not capped. Resets to run on restart.
+- **VR Options** lives on the Controls menu, in the slot the mouse/joystick page
+  used to occupy -- neither of those settings means anything in a VR build. It
+  holds Handed (`vr_control_scheme`, right or left), Swap Sticks
+  (`vr_switch_sticks` -- handedness moves BOTH sticks with the weapon hand, so a
+  left-handed player who still wants move on the left and turn on the right
+  turns this on; face button 1 travels with the move stick, so jump stays next to
+  the thumb that walks you, and a left-hander with this on gets the stock
+  physical layout -- move on the left stick, jump on A -- with the gun in the
+  left hand; alt-fire does NOT move, it stays on the weapon hand), Height Adjust
+  (`vr_height_offset`, metres added to your real headset height so a seated
+  player stands), Turn Mode (`vr_turn_mode`, snap or smooth) and Turn Amount
+  (`vr_turn_angle`, the snap step or the smooth rate). The
+  internal symbols in `ui_controls2.cpp` still carry their historic
+  `...MouseJoyStick...` names.
+- **Use** (dominant stick click) suppresses the 6DoF lean-to-move contribution
+  while it is held. EF reads "hold Use + strafe" as a body lean
+  (`bg_pangles.cpp`), and head motion feeds `rightmove` continuously in VR, so
+  otherwise simply looking around with Use held leans the player back and forth.
+  A deliberate strafe on the move stick still leans, as EF intends.
 - **Crouch** is on the *turn* stick's Y axis, not a stick click, because that
   axis is otherwise unused (the move stick owns its own Y). With
   `vr_switch_sticks 1` it follows the turn stick to the other hand. A worn
