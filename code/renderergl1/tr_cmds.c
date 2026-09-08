@@ -179,6 +179,30 @@ static void R_VR_PatchDrawSurfsCommand( drawSurfsCommand_t *cmd, stereoFrame_t s
 		VectorMA( cmd->refdef.vieworg, sep, cmd->refdef.viewaxis[1], cmd->refdef.vieworg );
 		VectorCopy( cmd->refdef.vieworg, cmd->viewParms.or.origin );
 		VectorCopy( cmd->refdef.vieworg, cmd->viewParms.pvsOrigin );
+	} else if ( cmd->refdef.rdflags & RDF_NOWORLDMODEL ) {
+		// A small 3D model drawn into a 2D HUD box: the comm talking-head
+		// portrait, weapon-select icons, scoreboard heads.  It keeps its own
+		// symmetric FOV and gets no IPD offset, so nothing above moves it -- but
+		// the 2D HUD it sits in IS moved per eye by R_VR_PatchStretchPicCommand,
+		// for that eye's asymmetric-FOV recentering plus the cg_hudDepth
+		// convergence parallax.  Left where it was captured the model stays put in
+		// both eyes while its surroundings shift, which reads as a large and
+		// oppositely-signed disparity -- the head never converges.  Move its
+		// viewport by the same offset so it shares the HUD's stereo plane.
+		//
+		// Full-screen sub-scenes are left alone, matching the guard in
+		// R_VR_PatchStretchPicCommand: those are backgrounds, not HUD insets.
+		if ( cmd->viewParms.viewportWidth < glConfig.vidWidth - 2 ||
+		     cmd->viewParms.viewportHeight < glConfig.vidHeight - 2 ) {
+			float ox, oy;
+
+			R_VR_GetHudReplayOffset( stereoFrame, &ox, &oy );
+
+			// oy is a top-down screen delta; viewportY is measured from the
+			// bottom (see RE_RenderScene), so it takes the opposite sign.
+			cmd->viewParms.viewportX += (int)ox;
+			cmd->viewParms.viewportY -= (int)oy;
+		}
 	}
 
 	R_RebuildViewParmsWorld( &cmd->viewParms );

@@ -600,14 +600,13 @@ void SCR_UpdateScreen( void ) {
 	if( uivm || com_dedicated->integer || CL_Patrons_Active() )
 	{
 		// Cinematic skip (applies in BOTH VR and flat).  When the player hits the
-		// skip button during a scripted cutscene the SP game fast-forwards via
-		// timescale 100 (skippingCinematic=1) and runs the ICARUS script to its
-		// natural end.  Rather than draw the racing cutscene, present a cheap black
-		// frame: that reads as an immediate cut, and (in VR) keeps frames cheap so
-		// the headset stays at full refresh and the fast-forward isn't throttled by
-		// xrWaitFrame pacing.  The game DLL drives ICARUS to the end independently of
-		// rendering, so not drawing the scene for those few frames is safe.  Kill the
-		// audio once on the skip edge so the real-time VO stops dead.
+		// skip button during a scripted cutscene the SP game drains the ICARUS
+		// script to its end inside a single server frame (ICARUS_SkipCinematic),
+		// with the game clock untouched, and clears skippingCinematic when it is
+		// done.  That is normally over in a frame or two; draw a cheap black frame
+		// meanwhile so the player sees a clean cut rather than the last cutscene
+		// image.  Kill the audio once on the skip edge so any voice line already
+		// playing stops dead.
 		qboolean skippingCin = Cvar_VariableIntegerValue( "skippingCinematic" ) != 0;
 		{
 			static qboolean wasSkippingCin = qfalse;
@@ -615,11 +614,10 @@ void SCR_UpdateScreen( void ) {
 				S_StopAllSounds();
 			}
 #ifdef ELITEFORCE
-			// Falling edge: the skip has finished and we're back to normal
-			// gameplay speed.  The S_StopAllSounds above (or the fast-forward
-			// itself) left the level music silent, so re-issue the cached track
-			// now that the mixer is pumping again -- otherwise skipping the intro
-			// drops you into the game with no music.
+			// Falling edge: the skip has finished.  The S_StopAllSounds above
+			// left the level music silent, so re-issue the cached track now that
+			// the mixer is pumping again -- otherwise skipping the intro drops
+			// you into the game with no music.
 			else if ( !skippingCin && wasSkippingCin && Cvar_VariableIntegerValue( "sp_game" ) ) {
 				CL_SP_RestartMusic();
 			}
@@ -640,7 +638,7 @@ void SCR_UpdateScreen( void ) {
 			{
 				TBXR_prepareEyeBuffer( 0 );
 				if ( skippingCin ) {
-					// Cheap black frame -- skip the expensive cgame cinematic draw
+					// Cheap black frame -- skip the cgame cinematic draw entirely
 					// (see the skip note at the top of this block).
 					re.BeginFrame( STEREO_CENTER );
 					SCR_FillRect( 0, 0, 640, 480, colorBlack );
@@ -706,9 +704,8 @@ void SCR_UpdateScreen( void ) {
 		// XXX
 		int in_anaglyphMode = Cvar_VariableIntegerValue("r_anaglyphMode");
 		if ( skippingCin ) {
-			// Skipping a cutscene: cheap black frame instead of the racing
-			// cinematic (see note at the top of this block).  Flat Com_Frame is
-			// uncapped, so the timescale-100 fast-forward finishes near-instantly.
+			// Skipping a cutscene: cheap black frame instead of the cutscene
+			// image (see note at the top of this block).
 			re.BeginFrame( STEREO_CENTER );
 			SCR_FillRect( 0, 0, 640, 480, colorBlack );
 		} else if ( cls.glconfig.stereoEnabled || in_anaglyphMode) {

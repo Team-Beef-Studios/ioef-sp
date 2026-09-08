@@ -58,6 +58,7 @@ cvar_t	*sv_gametype;
 cvar_t	*sv_pure;
 cvar_t	*sv_floodProtect;
 cvar_t	*sv_lanForceRate; // dedicated 1 (LAN) server forces local client rates to 99999 (bug #491)
+cvar_t	*sv_spCinematicGuard;	// SP: clear stale cutscene-skip state (see SV_SP_CinematicGuard)
 #ifndef STANDALONE
 cvar_t	*sv_strictAuth;
 #endif
@@ -1062,6 +1063,43 @@ int SV_FrameMsec()
 
 /*
 ==================
+SV_SP_CinematicGuard
+
+Belt and braces for the SP cutscene skip.  The skip itself is driven entirely by
+the game DLL (ICARUS_SkipCinematic), which drains the script inside one server
+frame and clears "skippingCinematic" itself.  If any path ever leaves that flag
+set once the cutscene camera is off, the client would keep drawing the black skip
+frame with no way out, so clear it here.
+
+The timescale half is historical: Raven's skip set timescale to 100 and relied on
+a single restore site in the game DLL that a level change or a player death could
+bypass, which left gameplay running at 100x.  Nothing raises the timescale above 1
+any more (the VR selector wheel only ever lowers it), so a value above 1 outside a
+cutscene is stale state -- reset it.
+==================
+*/
+static void SV_SP_CinematicGuard( void ) {
+	if ( !sv_spCinematicGuard->integer || !Cvar_VariableIntegerValue( "sp_game" ) ) {
+		return;
+	}
+
+	if ( Cvar_VariableIntegerValue( "sv_sp_incamera" ) ) {
+		return;
+	}
+
+	if ( Cvar_VariableIntegerValue( "skippingCinematic" ) ) {
+		Cvar_Set( "skippingCinematic", "0" );
+	}
+
+	if ( com_timescale->value > 1.0f ) {
+		Com_DPrintf( "SV_SP_CinematicGuard: stale timescale %g outside a cutscene, resetting\n",
+			com_timescale->value );
+		Cvar_Set( "timescale", "1" );
+	}
+}
+
+/*
+==================
 SV_Frame
 
 Player movement occurs as a result of packet events, which
@@ -1094,6 +1132,8 @@ void SV_Frame( int msec ) {
 	if ( SV_CheckPaused() ) {
 		return;
 	}
+
+	SV_SP_CinematicGuard();
 
 	// if it isn't time for the next frame, do nothing
 	if ( sv_fps->integer < 1 ) {

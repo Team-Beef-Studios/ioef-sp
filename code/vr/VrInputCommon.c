@@ -825,19 +825,63 @@ void VR_HandleControllerInput()
 
 	// Crouch: pull the TURN stick down to TOGGLE crouch.  That stick's Y axis is
 	// otherwise unused (X is turn, and the move stick owns Y), so this keeps both
-	// stick clicks free.  Edge-detected off a deadzone so a diagonal turn does not
-	// trip it.  Jumping stands you back up, which is what you reach for
+	// stick clicks free.  Jumping stands you back up, which is what you reach for
 	// instinctively.
+	//
+	// A worn thumbstick rests off-centre and jitters, which used to toggle crouch
+	// on its own.  Three guards, all cheap, and none of them in the way of a
+	// deliberate pull:
+	//   - a high engage threshold (vr_crouch_threshold) with the release much
+	//     nearer centre, so a stick resting past the threshold latches rather
+	//     than chattering the toggle;
+	//   - the pull must be clearly vertical, so a hard turn cannot trip it;
+	//   - it must stay past the threshold for vr_crouch_holdms, which shrugs off
+	//     a single noisy sample.  This one is deliberately tiny: steady drift
+	//     would outlast any dwell anyway, so the threshold and the dominance
+	//     test do the real work, and a long dwell only swallows the quick flick
+	//     down that most people actually use.
 	{
-		static qboolean crouchToggled  = qfalse;
+		static qboolean crouchToggled   = qfalse;
 		static qboolean crouchStickDown = qfalse;   // latched, for edge detection
+		static int      crouchHoldStart = 0;        // when the pull crossed the line
 		qboolean crouchWas = crouchStickDown;
 		qboolean crouchNow;
+		float    engage = vr_crouch_threshold->value;
+		float    release;
+		int      holdMs = vr_crouch_holdms->integer;
 
-		// Hysteresis: engage past -0.7, release only above -0.5, so a stick
-		// resting near the threshold cannot chatter the toggle.
-		if (pTurnStick->y < -0.7f)      crouchStickDown = qtrue;
-		else if (pTurnStick->y > -0.5f) crouchStickDown = qfalse;
+		if (holdMs < 0) holdMs = 0;
+
+		if (engage < 0.0f) engage = -engage;   // sign is implied by "pull down"
+		release = engage * 0.4f;
+
+		if (engage <= 0.0f)
+		{
+			crouchStickDown = qfalse;   // vr_crouch_threshold 0 == stick crouch off
+			crouchHoldStart = 0;
+		}
+		else if (pTurnStick->y < -engage &&
+		         fabs(pTurnStick->y) > fabs(pTurnStick->x) * 1.2f)
+		{
+			int now = Sys_Milliseconds();
+
+			if (!crouchHoldStart)
+			{
+				crouchHoldStart = now;
+			}
+			if (now - crouchHoldStart >= holdMs)
+			{
+				crouchStickDown = qtrue;
+			}
+		}
+		else
+		{
+			crouchHoldStart = 0;
+			if (pTurnStick->y > -release)
+			{
+				crouchStickDown = qfalse;
+			}
+		}
 		crouchNow = crouchStickDown;
 
 		if (crouchNow && !crouchWas && !cheatChord)

@@ -612,6 +612,14 @@ static float    vibration_channel_duration[SIDE_COUNT]  = { 0.0f, 0.0f };
 static float    vibration_channel_intensity[SIDE_COUNT] = { 0.0f, 0.0f };
 static qboolean vibration_channel_playing[SIDE_COUNT]   = { qfalse, qfalse };
 
+/* Milliseconds of vibration the runtime has already been handed and has not yet
+   finished playing.  See TBXR_ProcessHaptics. */
+static float    vibration_channel_submitted[SIDE_COUNT] = { 0.0f, 0.0f };
+
+/* A "run until stopped" channel has no end date, so it is handed to the runtime
+   in windows of this length and renewed as each window runs out. */
+#define HAPTIC_CONTINUOUS_WINDOW_MS   100.0f
+
 void TBXR_Vibrate( int duration, int chan, float intensity )
 {
 	int i;
@@ -645,9 +653,12 @@ void TBXR_ProcessHaptics( void )
 {
 	static float lastFrameTime = 0.0f;
 	float timestamp = (float)Sys_Milliseconds();
-	float frametime = timestamp - lastFrameTime;
+	float frametime;
 	int   i;
 
+	/* The first call has no previous frame to measure against; Sys_Milliseconds
+	   is time since startup, which would expire the first effect immediately. */
+	frametime = ( lastFrameTime == 0.0f ) ? 0.0f : timestamp - lastFrameTime;
 	lastFrameTime = timestamp;
 
 	if ( !gAppState.Session || !actionSet ) {
@@ -656,33 +667,52 @@ void TBXR_ProcessHaptics( void )
 
 	for ( i = 0; i < SIDE_COUNT; i++ ) {
 		XrHapticActionInfo hapticActionInfo = {0};
+		qboolean           running;
 
 		hapticActionInfo.type          = XR_TYPE_HAPTIC_ACTION_INFO;
 		hapticActionInfo.next          = NULL;
 		hapticActionInfo.action        = vibrateAction;
 		hapticActionInfo.subactionPath = handSubactionPath[i];
 
-		if ( vibration_channel_duration[i] > 0.0f ||
-			 vibration_channel_duration[i] == -1.0f ) {
-			XrHapticVibration vibration = {0};
+		running = (qboolean)( vibration_channel_duration[i] > 0.0f ||
+							  vibration_channel_duration[i] == -1.0f );
 
-			vibration.type      = XR_TYPE_HAPTIC_VIBRATION;
-			vibration.next      = NULL;
-			vibration.amplitude = vibration_channel_intensity[i];
-			// ToXrTime takes SECONDS; our durations are milliseconds.  (JKXR
-			// passes ms straight in, overshooting by 1000x, and relies on the
-			// explicit stop below to cut the effect off.)
-			// A "run until stopped" channel (-1) is re-applied every frame, so it
-			// only needs to outlast one frame; 100ms keeps it smooth and bounds
-			// how long it can hang on if we stop ticking.
-			vibration.duration  = ( vibration_channel_duration[i] == -1.0f )
-								? ToXrTime( 0.1 )
-								: ToXrTime( vibration_channel_duration[i] / 1000.0 );
-			vibration.frequency = XR_FREQUENCY_UNSPECIFIED;
+		/* Age off whatever the runtime is still playing from an earlier submit. */
+		if ( vibration_channel_submitted[i] > 0.0f ) {
+			vibration_channel_submitted[i] -= frametime;
+			if ( vibration_channel_submitted[i] < 0.0f ) {
+				vibration_channel_submitted[i] = 0.0f;
+			}
+		}
 
-			CHECK_XRCMD( xrApplyHapticFeedback( gAppState.Session, &hapticActionInfo,
-												(const XrHapticBaseHeader *)&vibration ) );
-			vibration_channel_playing[i] = qtrue;
+		if ( running ) {
+			/* Submit ONCE per effect and let the runtime play it out.  Re-issuing
+			   xrApplyHapticFeedback every frame (as JKXR does) stacks one
+			   overlapping request per frame -- about 29 of them for a 400ms
+			   effect at 72Hz -- which backs up the runtime's haptics queue and
+			   stalls controller input until it drains: poses and buttons freeze,
+			   then the vibration arrives late.  One call per effect is what the
+			   OpenXR haptics model expects. */
+			if ( vibration_channel_submitted[i] <= 0.0f ) {
+				XrHapticVibration vibration = {0};
+				float             submitMs;
+
+				submitMs = ( vibration_channel_duration[i] == -1.0f )
+						 ? HAPTIC_CONTINUOUS_WINDOW_MS
+						 : vibration_channel_duration[i];
+
+				vibration.type      = XR_TYPE_HAPTIC_VIBRATION;
+				vibration.next      = NULL;
+				vibration.amplitude = vibration_channel_intensity[i];
+				/* ToXrTime takes SECONDS; our durations are milliseconds. */
+				vibration.duration  = ToXrTime( submitMs / 1000.0 );
+				vibration.frequency = XR_FREQUENCY_UNSPECIFIED;
+
+				CHECK_XRCMD( xrApplyHapticFeedback( gAppState.Session, &hapticActionInfo,
+													(const XrHapticBaseHeader *)&vibration ) );
+				vibration_channel_submitted[i] = submitMs;
+				vibration_channel_playing[i]   = qtrue;
+			}
 
 			if ( vibration_channel_duration[i] != -1.0f ) {
 				vibration_channel_duration[i] -= frametime;
@@ -693,7 +723,8 @@ void TBXR_ProcessHaptics( void )
 			}
 		} else if ( vibration_channel_playing[i] ) {
 			CHECK_XRCMD( xrStopHapticFeedback( gAppState.Session, &hapticActionInfo ) );
-			vibration_channel_playing[i] = qfalse;
+			vibration_channel_playing[i]   = qfalse;
+			vibration_channel_submitted[i] = 0.0f;
 		}
 	}
 }

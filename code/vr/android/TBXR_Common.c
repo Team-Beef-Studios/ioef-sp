@@ -1335,11 +1335,42 @@ void TBXR_prepareEyeBuffer(int eye)
 {
 	vr.eye = eye;
 	ovrFramebuffer* frameBuffer = &(gAppState.Renderer.FrameBuffer[eye]);
+
+	// The NullFrameBuffer is submitted as the projection layer behind the virtual
+	// screen whenever the screen layer is used (see TBXR_submitFrame), and it
+	// covers the whole FOV around the quad.  Nothing ever renders into it, so
+	// without this clear it presents whatever the driver left in the swapchain
+	// image -- in practice an old frame, which shows up as a flash of stale
+	// content around the virtual screen.  Clear it first, then bind the real eye
+	// buffer, so the acquire order is unchanged.
+	ovrFramebuffer_Acquire(&gAppState.Renderer.NullFrameBuffer);
+	ovrFramebuffer_SetCurrent(&gAppState.Renderer.NullFrameBuffer);
+	{
+		const int nullW = gAppState.Renderer.NullFrameBuffer.ColorSwapChain.Width;
+		const int nullH = gAppState.Renderer.NullFrameBuffer.ColorSwapChain.Height;
+
+		if (vr_debugNullLayer && vr_debugNullLayer->integer)
+		{
+			// Diagnostic: paint the backdrop magenta rather than black, so a
+			// glimpse of this layer is unmistakable in a screen recording.
+			glEnable( GL_SCISSOR_TEST );
+			glViewport( 0, 0, nullW, nullH );
+			glClearColor( 1.0f, 0.0f, 1.0f, 1.0f );
+			glScissor( 0, 0, nullW, nullH );
+			glClear( GL_COLOR_BUFFER_BIT );
+			glScissor( 0, 0, 0, 0 );
+			glDisable( GL_SCISSOR_TEST );
+			glDisable( GL_FRAMEBUFFER_SRGB );
+		}
+		else
+		{
+			TBXR_ClearFrameBuffer(nullW, nullH);
+		}
+	}
+
 	ovrFramebuffer_Acquire(frameBuffer);
 	ovrFramebuffer_SetCurrent(frameBuffer);
 	TBXR_ClearFrameBuffer(frameBuffer->ColorSwapChain.Width, frameBuffer->ColorSwapChain.Height);
-
-	ovrFramebuffer_Acquire(&gAppState.Renderer.NullFrameBuffer);
 
 	//Seems odd, but used to move the HUD elements to be central on the player's view
 	//HMDs with a symmetric fov (like the PICO) will have 0 in this value, but the Meta Quest
@@ -1420,7 +1451,15 @@ void TBXR_submitFrame()
 	XrCompositionLayerProjectionView projection_layer_elements[2] = {0};
 	XrCompositionLayerQuad quad_layer;
 
-	if (!VR_UseScreenLayer())
+	// Use the decision the RENDER was made with (SCR_UpdateScreen calls
+	// VR_UseScreenLayer, which stores it here), not a fresh one.  The cgame runs
+	// between those two points and updates vr.cin_camera, so re-evaluating here
+	// could disagree with what was actually drawn -- and the mismatch that bites
+	// is "rendered as the quad, submitted as stereo": the quad path only renders
+	// FrameBuffer[0], so the projection layer then presents FrameBuffer[1]
+	// holding a stale frame.  That is the flash of the old loading screen seen
+	// for a frame or two after a cutscene skip.
+	if (!vr.using_screen_layer)
 	{
 		memset(&projection_layer, 0, sizeof(XrCompositionLayerProjection));
 		projection_layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;

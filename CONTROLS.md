@@ -71,7 +71,7 @@ selectable, rather than disappearing.
 | Right (dominant) | Grip, hold | **Weapon wheel** — release on a slot to equip it | `VrInputCommon.c:656` |
 | Right (dominant) | A button | Jump (or skip cutscene, if `vr.cin_camera`) | `VrInputCommon.c:799` |
 | Right (dominant) | Stick X | Turn (snap by default, `vr_turn_mode`/`vr_turn_angle`) | `VrInputCommon.c:740` |
-| Right (dominant) | Stick Y, pull down | **Crouch** — toggle; jumping cancels it | `VrInputCommon.c:826` |
+| Right (dominant) | Stick Y, pull down | **Crouch** — toggle, past `vr_crouch_threshold`; jumping cancels it | `VrInputCommon.c:826` |
 | Right (dominant) | Stick click | **Use** | `VrInputCommon.c:820` |
 | Left (off-hand) | Trigger | unused | — |
 | Left (off-hand) | Grip, hold | **Inventory wheel** — items + quick save/load/objectives | `VrInputCommon.c:656` |
@@ -146,9 +146,24 @@ local player's own weapon rumbles — nearby NPC fire does not.
   `Elite-Force-VR/cgame/cg_weapons.cpp`. The Quick Save / Quick Load icons come
   from JKXR (`z_vr_assets_base/gfx/`), shipped in `z_vr_assets_base.pk3`.
 - **Crouch** is on the *turn* stick's Y axis, not a stick click, because that
-  axis is otherwise unused (the move stick owns its own Y). It engages past
-  −0.7 and releases above −0.5, so a diagonal turn cannot chatter the toggle.
-  With `vr_switch_sticks 1` it follows the turn stick to the other hand.
+  axis is otherwise unused (the move stick owns its own Y). With
+  `vr_switch_sticks 1` it follows the turn stick to the other hand. A worn
+  thumbstick rests off-centre and jitters, so three guards keep drift from
+  crouching you on its own: it engages past `vr_crouch_threshold` (archived,
+  default `0.8`) and only releases at 40% of that, so a stick resting past the
+  line latches instead of chattering; the pull must be clearly vertical, so a
+  hard turn cannot trip it; and it must be held past the line for
+  `vr_crouch_holdms` (default `40`), which shrugs off a single noisy sample. That
+  dwell is deliberately far below a quick flick down — steady drift outlasts any
+  dwell anyway, so the threshold and the dominance test do the real work; set it
+  to `0` if you want none. Raise `vr_crouch_threshold` if your stick is badly
+  worn, or set it to `0` to turn stick crouch off entirely.
+- **`vr_debugNullLayer 1`** is a diagnostic, not a feature. The virtual screen is
+  submitted as a quad with a projection layer behind it filling the rest of the
+  FOV; that backdrop is cleared to black each frame in `TBXR_prepareEyeBuffer`.
+  Setting this paints it magenta instead, so if a stray frame of it ever shows
+  through you can tell at a glance whether you are seeing the backdrop or the
+  quad.
 - **Smooth turn** (`vr_turn_mode 1`) is scaled by real elapsed time, so the turn
   rate is identical on a 72 Hz standalone headset and a 120 Hz PC one. The rate
   matches the pre-fix per-frame step at 90 Hz, so that refresh rate's feel is

@@ -20,6 +20,9 @@ cvar_t	*vr_haptic_intensity;
 cvar_t	*vr_refresh;
 cvar_t	*vr_turn_mode;
 cvar_t	*vr_turn_angle;
+cvar_t	*vr_crouch_threshold;
+cvar_t	*vr_crouch_holdms;
+cvar_t	*vr_debugNullLayer;
 cvar_t	*vr_switch_sticks;
 cvar_t	*vr_movement_orientation;
 cvar_t	*vr_weapon_pitchadjust;
@@ -53,6 +56,16 @@ void VR_InitCvars(void)
 	vr_turn_mode             = Cvar_Get( "vr_turn_mode", "0", CVAR_ARCHIVE );
 	// Snap-turn step (degrees); also the per-tick smooth-turn rate basis.
 	vr_turn_angle            = Cvar_Get( "vr_turn_angle", "45", CVAR_ARCHIVE );
+	// How far the turn stick must be pulled DOWN to toggle crouch, 0..1.  Raise
+	// it on a controller with stick drift; 0 turns stick crouch off entirely.
+	vr_crouch_threshold      = Cvar_Get( "vr_crouch_threshold", "0.8", CVAR_ARCHIVE );
+	// Milliseconds the stick must stay past that threshold.  Only there to shrug
+	// off single-sample noise -- keep it well under a quick flick.  0 disables it.
+	vr_crouch_holdms         = Cvar_Get( "vr_crouch_holdms", "40", CVAR_ARCHIVE );
+	// Diagnostic: tint the projection layer that sits behind the virtual screen
+	// magenta instead of black, so it is obvious when that layer is what you are
+	// looking at.  See TBXR_prepareEyeBuffer.
+	vr_debugNullLayer        = Cvar_Get( "vr_debugNullLayer", "0", CVAR_ARCHIVE );
 	// Swap which thumbstick moves vs turns (0 = move on dominant hand's off
 	// stick, turn on dominant; 1 = swapped).  Matches RealRTCWXR.
 	vr_switch_sticks         = Cvar_Get( "vr_switch_sticks", "0", CVAR_ARCHIVE );

@@ -3120,16 +3120,6 @@ int Com_ModifyMsec( int msec ) {
 		// we may want to clamp the time to prevent players from
 		// flying off edges when something hitches.
 		clampTime = 200;
-#ifdef ELITEFORCE
-		// While fast-forwarding to skip a cinematic the game sets timescale=100
-		// (and skippingCinematic=1) and the player is frozen, so the 200ms hitch
-		// clamp isn't needed -- and it would otherwise throttle the skip to ~12x
-		// (200ms/frame) instead of ~100x, making the "skip" merely crawl/speed up.
-		// Allow a much larger step during the skip so it finishes near-instantly.
-		if ( com_timescale->value > 1.0f && Cvar_VariableIntegerValue( "skippingCinematic" ) ) {
-			clampTime = 5000;
-		}
-#endif
 	}
 
 	if ( msec > clampTime ) {
