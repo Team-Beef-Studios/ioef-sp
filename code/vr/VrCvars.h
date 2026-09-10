@@ -21,6 +21,8 @@ extern cvar_t	*vr_height_offset;
 extern cvar_t	*vr_positional_factor;
 extern cvar_t	*vr_screen_dist;
 extern cvar_t	*vr_immersive_cinematics;
+extern cvar_t	*vr_camera_shake;
+extern cvar_t	*vr_debugCinLayer;
 extern cvar_t	*vr_control_scheme;
 extern cvar_t	*vr_haptic_intensity;
 extern cvar_t	*vr_refresh;

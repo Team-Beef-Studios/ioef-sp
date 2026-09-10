@@ -1313,6 +1313,16 @@ pairs (name string, value string).  This preserves engine settings like
 graphics quality, audio volume, key bindings, etc. across save/load.
 ===============
 */
+// A save stores every archived cvar and Cvar_Sets them all back on load.  That
+// is right for retail settings, but the vr_ namespace is this port's own comfort
+// and control preferences -- handedness, turn mode, height, cutscene mode, the
+// weapon alignment.  Restoring those would silently undo whatever the player set
+// since the save was written, and a save older than a setting resets it to the
+// default.  The player's current preference must win over the one in the file.
+static qboolean SV_SP_CvarIsVrPreference( const char *name ) {
+	return (qboolean)( name && !Q_stricmpn( name, "vr_", 3 ) );
+}
+
 static qboolean SV_SP_WriteArchivedCvars( void ) {
 	cvar_t *var;
 	int count;
@@ -1320,7 +1330,7 @@ static qboolean SV_SP_WriteArchivedCvars( void ) {
 
 	count = 0;
 	for ( var = cvar_vars; var; var = var->next ) {
-		if ( var->flags & CVAR_ARCHIVE ) {
+		if ( ( var->flags & CVAR_ARCHIVE ) && !SV_SP_CvarIsVrPreference( var->name ) ) {
 			count++;
 		}
 	}
@@ -1331,7 +1341,7 @@ static qboolean SV_SP_WriteArchivedCvars( void ) {
 	}
 
 	for ( var = cvar_vars; var; var = var->next ) {
-		if ( !( var->flags & CVAR_ARCHIVE ) ) {
+		if ( !( var->flags & CVAR_ARCHIVE ) || SV_SP_CvarIsVrPreference( var->name ) ) {
 			continue;
 		}
 
@@ -1407,7 +1417,11 @@ static qboolean SV_SP_RestoreArchivedCvars( void ) {
 			return qfalse;
 		}
 
-		Cvar_Set( (const char *)nameBuffer, (const char *)valueBuffer );
+		// Read every pair to keep the stream aligned, but drop vr_ entries: saves
+		// written before this change still carry them.
+		if ( !SV_SP_CvarIsVrPreference( (const char *)nameBuffer ) ) {
+			Cvar_Set( (const char *)nameBuffer, (const char *)valueBuffer );
+		}
 		Z_Free( nameBuffer );
 		Z_Free( valueBuffer );
 	}

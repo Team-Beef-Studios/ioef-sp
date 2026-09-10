@@ -38,11 +38,14 @@ qboolean VR_UseScreenLayer()
 	static int frame = 0;
 	vr.using_screen_layer =
 			(frame++ < 100) || //use screen for first 100 frames - stops splash screen giving a headache
-			// cin_camera covers scripted CGCam cutscenes AND the 2D scroll-text
-			// crawl (set in the cgame).  EF cutscenes draw orthographic 2D direct
-			// to the eye buffers, which can't render immersively -- so always use
-			// the flat screen for them (NOT gated by vr_immersive_cinematics).
-			(bool)(vr.cin_camera ||
+			// cin_flat is the 2D scroll-text crawl.  It is orthographic 2D drawn
+			// straight to the eye buffers with no 3D scene behind it, so it can
+			// never render immersively -- the flat screen is forced regardless of
+			// the cvar.  cin_camera is a scripted CGCam takeover: the real world IS
+			// rendered from the camera's viewpoint, so the player can opt into
+			// seeing it in stereo with vr_immersive_cinematics.
+			(bool)(vr.cin_flat ||
+			(vr.cin_camera && !vr.immersive_cinematics) ||
 			vr.misc_camera ||
 			// Patron credits are a flat 2D screen, and are drawn while quitting
 			// from gameplay too -- where clc.state would otherwise say immersive.
@@ -57,6 +60,26 @@ qboolean VR_UseScreenLayer()
 			( Key_GetCatcher( ) & KEYCATCH_UI ) ||
 			( Key_GetCatcher( ) & KEYCATCH_CONSOLE ));
 
+
+	// TEMPORARY: report why a cutscene went to the flat screen or to stereo.
+	// Logged only when the state changes, so a cutscene costs a couple of lines.
+	if (vr_debugCinLayer && vr_debugCinLayer->integer)
+	{
+		static int last = -1;
+		int now = (vr.cin_camera ? 1 : 0) | (vr.cin_flat ? 2 : 0)
+			| (vr.immersive_cinematics ? 4 : 0) | (vr.misc_camera ? 8 : 0)
+			| (vr.using_screen_layer ? 16 : 0)
+			| ((clc.state == CA_CINEMATIC) ? 32 : 0)
+			| ((Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CONSOLE)) ? 64 : 0);
+		if (now != last)
+		{
+			Com_Printf("VRCIN: cin_camera=%d cin_flat=%d immersive=%d misc=%d ROQ=%d ui=%d cvar=%g -> screen=%d\n",
+				vr.cin_camera, vr.cin_flat, vr.immersive_cinematics, vr.misc_camera,
+				(clc.state == CA_CINEMATIC), (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CONSOLE)) != 0,
+				vr_immersive_cinematics->value, vr.using_screen_layer);
+			last = now;
+		}
+	}
 	return vr.using_screen_layer;
 }
 
@@ -111,6 +134,18 @@ void VR_SetHMDPosition(float x, float y, float z )
 
 	VectorSet(vr.hmdposition, x, y, z);
 
+	// An immersive cutscene does not change the screen layer, so the transition
+	// below never fires for it.  Re-baseline on the cin_camera edge instead, so
+	// the player's lean is measured from where they stood when it began.
+	{
+		static qboolean s_wasCin = qfalse;
+		if (vr.cin_camera != s_wasCin)
+		{
+			vr.take_snap = true;
+			s_wasCin = vr.cin_camera;
+		}
+	}
+
 	//Can be set elsewhere
 	vr.take_snap |= (s_useScreen != VR_UseScreenLayer());
 	if (vr.take_snap || (frame++ < 100))
@@ -161,8 +196,10 @@ qboolean VR_GetFovTangentsForEye(int eye, float *tanLeft, float *tanRight, float
 		return qfalse;
 	}
 
-	//Don't use our projection if playing a cinematic and we are not immersive
-	if (vr.cin_camera && !vr.immersive_cinematics)
+	// A flat cutscene renders to the quad layer, so the engine's flat projection
+	// applies.  An immersive cutscene keeps the headset's own per-eye FOV -- the
+	// script's camera(FOV) zoom is ignored, because the optics fix the FOV.
+	if (vr.cin_flat || (vr.cin_camera && !vr.immersive_cinematics))
 	{
 		return qfalse;
 	}

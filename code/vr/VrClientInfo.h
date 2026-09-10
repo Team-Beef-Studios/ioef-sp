@@ -47,6 +47,7 @@ typedef struct {
 typedef struct {
     /* ---- camera / virtual-screen state (drives the flat quad layer) ---- */
     qboolean    cin_camera;             /* a scripted/ICARUS cinematic camera has taken over */
+    qboolean    cin_flat;               /* cutscene that CANNOT render in 3D (2D scroll-text crawl) */
     qboolean    misc_camera;            /* looking through a misc camera-view entity */
     qboolean    using_screen_layer;     /* this frame is being shown on the flat virtual screen */
     int         eye;                    /* the eye currently being rendered (0 = left, 1 = right) */

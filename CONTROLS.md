@@ -163,9 +163,29 @@ local player's own weapon rumbles — nearby NPC fire does not.
   left hand; alt-fire does NOT move, it stays on the weapon hand), Height Adjust
   (`vr_height_offset`, metres added to your real headset height so a seated
   player stands), Turn Mode (`vr_turn_mode`, snap or smooth) and Turn Amount
-  (`vr_turn_angle`, the snap step or the smooth rate). The
+  (`vr_turn_angle`, the snap step or the smooth rate), Cutscenes
+  (`vr_immersive_cinematics`) and Camera Shake (`vr_camera_shake`). The
   internal symbols in `ui_controls2.cpp` still carry their historic
   `...MouseJoyStick...` names.
+- **Cutscenes** chooses how a scripted cutscene is presented. SCREEN (default)
+  puts it on the flat virtual screen, which is what the port has done since
+  May 2026. IMMERSIVE renders the scripted camera in stereo instead: the script
+  supplies the viewpoint and the base yaw, your head supplies the rest. The
+  script's camera pitch, camera roll and `camera(FOV)` zoom are all dropped --
+  a scripted roll is one of the quickest ways to make a VR player ill, and a
+  headset cannot zoom. Angular camera shake goes with them; positional shake
+  stays. The letterbox bars are dropped too, because in stereo they are two
+  black slabs pinned to each eye rather than a frame around a picture. You keep
+  6DoF, so you can lean around the camera point. The 2D scroll-text crawl (the
+  game's intro) always stays on the flat screen -- it has no 3D scene behind it
+  to render.
+- **Camera Shake** (`vr_camera_shake`, default on) turns off every screen shake:
+  a nearby explosion, and a scripted `camera(SHAKE)` in a cutscene. Shake is a
+  common nausea trigger in VR. One gate covers the lot, because the ICARUS
+  command and every `CG_ExplosionEffects` caller both reach `CGCam_Shake`.
+  Switching it off cancels a shake that is already running, rather than letting
+  it play out. The engine registers the cvar so the menu reads the right value
+  before a map has loaded; the cgame is what acts on it.
 - **Use** (dominant stick click) suppresses the 6DoF lean-to-move contribution
   while it is held. EF reads "hold Use + strafe" as a body lean
   (`bg_pangles.cpp`), and head motion feeds `rightmove` continuously in VR, so

@@ -654,7 +654,9 @@ issues.
 #define	MAX_FILE_HANDLES	64
 
 #ifdef ELITEFORCE
-  #define Q3CONFIG_CFG "hmconfig.cfg"
+  // Renamed from Raven's hmconfig.cfg so an existing install starts from a
+  // clean config on update.  The old file is left in place, untouched.
+  #define Q3CONFIG_CFG "stvefxr.cfg"
 #else
 #ifdef DEDICATED
 #	define Q3CONFIG_CFG "q3config_server.cfg"

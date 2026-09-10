@@ -44,8 +44,11 @@ android {
         applicationId "com.teambeefvr.efxr"
         minSdk 29                // Quest 2/3, Pico Neo3/4 minimum
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        // These override AndroidManifest.xml -- AGP always wins over the manifest,
+        // so the manifest values alone never reach a build.  Keep the two in sync
+        // and bump versionCode on every release Android has to treat as an update.
+        versionCode 6
+        versionName "0.1.2"
 
         ndk {
             abiFilters 'arm64-v8a'

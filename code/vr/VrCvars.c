@@ -15,6 +15,8 @@ cvar_t	*vr_height_offset;
 cvar_t	*vr_positional_factor;
 cvar_t	*vr_screen_dist;
 cvar_t	*vr_immersive_cinematics;
+cvar_t	*vr_camera_shake;
+cvar_t	*vr_debugCinLayer;
 cvar_t	*vr_control_scheme;
 cvar_t	*vr_haptic_intensity;
 cvar_t	*vr_refresh;
@@ -46,6 +48,12 @@ void VR_InitCvars(void)
 	// 0 => scripted/ROQ cutscenes play on the flat virtual screen (Team Beef
 	// default; comfortable).  1 => cutscenes render immersively in 3D.
 	vr_immersive_cinematics  = Cvar_Get( "vr_immersive_cinematics", "0", CVAR_ARCHIVE );
+	// Read by the cgame (CGCam_Shake), not by the engine.  Registered here so it
+	// exists from startup: the VR Options menu reads it before any map has loaded,
+	// and an unregistered cvar reads back as 0 -- which would show ON as OFF.
+	vr_camera_shake          = Cvar_Get( "vr_camera_shake", "1", CVAR_ARCHIVE );
+	// Diagnostic: logs why a cutscene went to the flat screen or to stereo.
+	vr_debugCinLayer         = Cvar_Get( "vr_debugCinLayer", "0", CVAR_ARCHIVE );
 	// 0 = right-handed (weapon hand = right), 10 = left-handed.  Mirrors the
 	// RealRTCWXR control_scheme enum so a future left-handed UI toggle is just
 	// this cvar.
