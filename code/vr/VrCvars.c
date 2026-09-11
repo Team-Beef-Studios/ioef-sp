@@ -45,9 +45,10 @@ void VR_InitCvars(void)
 	// RealRTCWXR (vr_positional_factor 12).
 	vr_positional_factor     = Cvar_Get( "vr_positional_factor", "12.0", CVAR_ARCHIVE );
 	vr_screen_dist           = Cvar_Get( "vr_screen_dist", "3.5", CVAR_ARCHIVE );
-	// 0 => scripted/ROQ cutscenes play on the flat virtual screen (Team Beef
-	// default; comfortable).  1 => cutscenes render immersively in 3D.
-	vr_immersive_cinematics  = Cvar_Get( "vr_immersive_cinematics", "0", CVAR_ARCHIVE );
+	// 1 => a scripted camera cutscene renders in stereo, with head look on top of
+	// the script's framing.  0 => it plays on the flat virtual screen.  A Bink
+	// video always uses the flat screen either way -- it has no 3D scene.
+	vr_immersive_cinematics  = Cvar_Get( "vr_immersive_cinematics", "1", CVAR_ARCHIVE );
 	// Read by the cgame (CGCam_Shake), not by the engine.  Registered here so it
 	// exists from startup: the VR Options menu reads it before any map has loaded,
 	// and an unregistered cvar reads back as 0 -- which would show ON as OFF.

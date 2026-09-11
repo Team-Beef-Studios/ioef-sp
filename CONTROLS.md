@@ -167,10 +167,12 @@ local player's own weapon rumbles — nearby NPC fire does not.
   (`vr_immersive_cinematics`) and Camera Shake (`vr_camera_shake`). The
   internal symbols in `ui_controls2.cpp` still carry their historic
   `...MouseJoyStick...` names.
-- **Cutscenes** chooses how a scripted cutscene is presented. SCREEN (default)
-  puts it on the flat virtual screen, which is what the port has done since
-  May 2026. IMMERSIVE renders the scripted camera in stereo instead: the script
-  supplies the viewpoint and the base yaw, your head supplies the rest. The
+- **Cutscenes** chooses how a scripted cutscene is presented. IMMERSIVE
+  (default) renders the scripted camera in stereo: the script supplies the
+  viewpoint and the base yaw, your head supplies the rest. SCREEN puts it on
+  the flat virtual screen instead, which is what the port did from May 2026
+  until this option existed. A Bink video always uses the flat screen either
+  way, because there is no 3D scene to render. The
   script's camera pitch, camera roll and `camera(FOV)` zoom are all dropped --
   a scripted roll is one of the quickest ways to make a VR player ill, and a
   headset cannot zoom. Angular camera shake goes with them; positional shake
