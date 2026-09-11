@@ -1,0 +1,22 @@
+Local changes to the vendored upstream (see UPSTREAM-REVISION.txt).
+
+Keep this list short. Anything added here has to be re-applied by hand after a
+re-sync, so prefer solving problems on the engine side (cl_cin_bink.c) instead.
+
+1. bink_video.c, in bink_video_decode()
+   The "[DBG] video_decode pkt_size=..." trace was logged at BINK_LOG_ERROR, so it
+   printed unconditionally once per frame -- 15 lines/second into the console and
+   qconsole.log. Demoted to BINK_LOG_DEBUG. The other 15 "[DBG]" traces sit inside
+   error branches and only fire on a decode failure, so they were left alone.
+
+2. bink_common.h, in bink_log()
+   Added the optional "bink_log_hook" sink. Upstream writes diagnostics to stderr,
+   which is invisible in the Windows GUI build and on Android. cl_cin_bink.c points
+   the hook at Com_Printf so decode errors reach the console and qconsole.log.
+   The hook is NULL by default, which keeps the upstream stderr behaviour.
+
+Not changed on purpose:
+  * The allocator stays on plain malloc/free. intro.bik is 29 MB and would not fit
+    in the engine's Z_Malloc zone.
+  * bink_frame_to_rgb() is unused by the engine; cl_cin_bink.c has its own
+    YUV420P -> RGBA converter that writes the engine's pixel layout in one pass.

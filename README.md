@@ -62,6 +62,7 @@ current detail of each subsystem.
 ```
 code/            ioquake3 engine (C) — client, server, renderers, qcommon, sys, sdl, botlib
 code/vr/         OpenXR VR layer (shared + windows/ + android/ platform glue)
+code/binkdec/    Vendored Bink (.bik) video decoder (LGPL-2.1+) -- see Licensing
 code/qcommon/sp_types.h   Shared SP struct layouts for the engine↔game bridge
 android/         Standalone Quest/Pico build (Gradle + ndk-build; jni/, EFGame/, EFXR/)
 Makefile         GNU Make build for the PC engine
@@ -216,7 +217,21 @@ which ties that code to the retail Elite Force product. Its full text lives with
 that source in the **Elite-Force-VR** repository (`STEF Game Source License.doc`).
 Keep the SP game source under its own terms, distinct from the GPLv2 engine.
 
-### 3. Game assets — not included
+### 3. Bundled Bink decoder — GNU LGPL v2.1 or later
+
+`code/binkdec/` is a vendored third-party decoder for Bink 1 video, used to play
+the Elite Force cutscenes (`baseEF/video/*.bik`), which ship as Bink rather than
+RoQ. It is a self-contained C port of FFmpeg's Bink demuxer and video/audio
+decoders, licensed under the **GNU Lesser General Public License, version 2.1 or
+later** — see [`code/binkdec/COPYING.txt`](code/binkdec/COPYING.txt).
+
+LGPL-2.1-or-later is compatible with the GPLv2-or-later engine, and the combined
+binary is distributable under the GPL. Upstream revision and the short list of
+local changes are recorded in `code/binkdec/UPSTREAM-REVISION.txt` and
+`code/binkdec/LOCAL-PATCHES.txt`. Build without it using `USE_BINK=0`, which
+drops the decoder and disables Bink playback.
+
+### 4. Game assets — not included
 
 Maps, models, textures, sounds and other data (`baseEF/*.pk3`) are the property
 of their rights holders (Raven Software / Activision / CBS) and are **not part of

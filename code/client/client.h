@@ -597,6 +597,8 @@ void	SCR_DrawSmallChar( int x, int y, int ch );
 //
 
 void CL_PlayCinematic_f( void );
+void CL_InGameCinematic_f( void );
+qboolean CIN_IsInGameCinematic( void );
 void SCR_DrawCinematic (void);
 void SCR_RunCinematic (void);
 void SCR_StopCinematic (void);

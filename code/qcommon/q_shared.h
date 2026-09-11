@@ -52,6 +52,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //  #define STEAMPATH_NAME			"Star Trek Voyager: Elite Force"
 //  #define STEAMPATH_APPID			"2200"
   #define GAMENAME_FOR_MASTER		"EliteForce"
+  // Bink, decoded by code/binkdec via cl_cin_bink.c.  eflogo.bik is the
+  // publisher logo reel the retail game plays before the LCARS menu.
+  // Deliberately no CINEMATICS_INTRO: that macro is a Quake 3 convention that
+  // queues intro.bik through nextmap on first run, but in EF intro.bik is the
+  // story movie, not part of the boot sequence.
+  #define CINEMATICS_LOGO		"eflogo.bik"
   #define LEGACY_PROTOCOL
 #else
   #define PRODUCT_NAME				"ioq3"

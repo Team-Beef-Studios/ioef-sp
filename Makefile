@@ -190,6 +190,12 @@ ifndef USE_CODEC_MP3
 USE_CODEC_MP3=0
 endif
 
+# Bink (.bik) video playback -- required for the Elite Force cutscenes, which
+# ship as Bink rather than RoQ.  Decoder source lives in code/binkdec.
+ifndef USE_BINK
+USE_BINK=1
+endif
+
 ifndef USE_CODEC_OPUS
 USE_CODEC_OPUS=1
 endif
@@ -263,6 +269,7 @@ NDIR=$(MOUNT_DIR)/null
 UIDIR=$(MOUNT_DIR)/ui
 Q3UIDIR=$(MOUNT_DIR)/q3_ui
 JPDIR=$(MOUNT_DIR)/jpeg-8c
+BINKDIR=$(MOUNT_DIR)/binkdec
 OGGDIR=$(MOUNT_DIR)/libogg-1.3.1
 VORBISDIR=$(MOUNT_DIR)/libvorbis-1.3.4
 OPUSDIR=$(MOUNT_DIR)/opus-1.1
@@ -1068,6 +1075,10 @@ ifeq ($(USE_CODEC_MP3),1)
   CLIENT_CFLAGS += -DUSE_CODEC_MP3=1
 endif
 
+ifeq ($(USE_BINK),1)
+  CLIENT_CFLAGS += -DUSE_BINK=1 -I$(BINKDIR)
+endif
+
 ifeq ($(USE_CODEC_OPUS),1)
   CLIENT_CFLAGS += -DUSE_CODEC_OPUS
   NEED_OPUS=1
@@ -1608,7 +1619,7 @@ $(Q3ASM): $(Q3ASMOBJ)
 Q3OBJ = \
   $(B)/client/cl_cgame.o \
   $(B)/client/cl_cgame_sp.o \
-  $(B)/client/cl_cin.o \
+  $(B)/client/cl_cin.o   $(B)/client/cl_cin_bink.o \
   $(B)/client/cl_console.o \
   $(B)/client/cl_input.o \
   $(B)/client/cl_keys.o \
@@ -2062,6 +2073,10 @@ Q3OBJ += \
   $(B)/client/stream.o \
   $(B)/client/wincerts.o
 endif
+endif
+
+ifeq ($(USE_BINK),1)
+Q3OBJ +=   $(B)/client/bink_api.o   $(B)/client/bink_audio.o   $(B)/client/bink_bitstream.o   $(B)/client/bink_demux.o   $(B)/client/bink_video.o
 endif
 
 ifeq ($(NEED_OGG),1)
@@ -2612,6 +2627,9 @@ $(B)/client/%.o: $(ASMDIR)/%.c
 	$(DO_CC) -march=k8
 
 $(B)/client/%.o: $(CDIR)/%.c
+	$(DO_CC)
+
+$(B)/client/%.o: $(BINKDIR)/%.c
 	$(DO_CC)
 
 $(B)/client/%.o: $(SDIR)/%.c

@@ -125,6 +125,12 @@ for an EF SP engine build. `ARCH=x86_64`, `WINDRES`, `BUILD_GAME_QVM`, and
 | `BUILD_GAME_QVM=0` | Skips QVM bytecode compilation, which fails on GCC 15+ (see the `constexpr` note under Troubleshooting) and is not needed for SP. |
 | `USE_CODEC_MP3=1` | EF voice/dialogue files are `.mp3`; without it all scripted speech is silent (needs libmad). |
 
+`USE_BINK` defaults to `1` and needs no flag. It builds the vendored decoder in
+`code/binkdec` (LGPL-2.1+), which plays the EF cutscenes in `baseEF/video/*.bik`
+— the startup logo, the intro, and the pre-rendered sections of the scripted
+cutscenes. `USE_BINK=0` drops the decoder; the engine then plays RoQ only and
+logs a message when a script asks for a Bink video.
+
 > **Gotcha:** Make does not track changes to command-line variables. If you
 > built once and then add/change a flag like `BUILD_ELITEFORCE=1`, the existing
 > `.o` files look up to date and make will *not* recompile them — you'll get a
@@ -154,6 +160,7 @@ build/release-mingw64-x86_64/
 | `BUILD_GAME_SO` | 0 | Build baseq3 game DLLs (MP; not needed for SP) |
 | `BUILD_GAME_QVM` | 1 | Build QVM bytecode (set to 0 to skip; required on GCC 15+, see note below) |
 | `USE_OPENAL` | 1 | OpenAL sound backend |
+| `USE_BINK` | 1 | Bink (.bik) video playback; set to 0 to drop `code/binkdec` and disable the cutscenes |
 | `USE_CURL` | 1 | HTTP/FTP download support |
 
 Example building only the client with debug symbols:

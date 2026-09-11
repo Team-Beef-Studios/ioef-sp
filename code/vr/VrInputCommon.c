@@ -612,6 +612,24 @@ void VR_HandleControllerInput()
 	// its cursor with the pointing controller (laser-pointer) instead of running
 	// gameplay input.  (Console/UI catcher -- NOT cinematics, which still want the
 	// gameplay branch so the A-button cutscene-skip works.)
+	// A video cinematic (CA_CINEMATIC -- the Bink/RoQ startup logo and intro) is
+	// neither a menu nor gameplay, and the only input it accepts is "skip".  Send
+	// Escape, which cl_keys.c turns into a skip of the video currently playing.
+	// Physical A is read straight off the right controller so it is the A button
+	// in both handedness settings, and the menu button skips too.  Note this is
+	// not the ICARUS camera cutscene: that runs with clc.state == CA_ACTIVE and
+	// still goes through the gameplay branch below.
+	if (clc.state == CA_CINEMATIC)
+	{
+		VR_MenuButtonKey(&rightTrackedRemoteState_new, &rightTrackedRemoteState_old, xrButton_A,     K_ESCAPE);
+		VR_MenuButtonKey(&rightTrackedRemoteState_new, &rightTrackedRemoteState_old, xrButton_Enter, K_ESCAPE);
+		VR_MenuButtonKey(&leftTrackedRemoteState_new,  &leftTrackedRemoteState_old,  xrButton_Enter, K_ESCAPE);
+
+		rightTrackedRemoteState_old = rightTrackedRemoteState_new;
+		leftTrackedRemoteState_old  = leftTrackedRemoteState_new;
+		return;
+	}
+
 	qboolean menuActive = (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CONSOLE)) != 0;
 	if (menuActive)
 	{

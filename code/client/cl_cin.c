@@ -33,6 +33,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "client.h"
 #include "snd_local.h"
+#include "cl_cin_bink.h"
 
 #define MAXSIZE				8
 #define MINSIZE				4
@@ -125,7 +126,22 @@ typedef struct {
 	int					playonwalls;
 	byte*				buf;
 	long				drawX, drawY;
+
+	// Bink playback (cl_cin_bink.c).  RoQ leaves cinType at CIN_TYPE_ROQ (0)
+	// and binkState at NULL, so nothing below is touched on the RoQ path.
+	int					cinType;
+	void				*binkState;
+
+	// set for inGameCinematic: on stop, go back to the running game instead of
+	// disconnecting and running nextmap the way RoQShutdown does
+	qboolean			restoreState;
+	connstate_t			savedState;
 } cin_cache;
+
+typedef enum {
+	CIN_TYPE_ROQ = 0,
+	CIN_TYPE_BINK
+} cinType_t;
 
 static cinematics_t		cin;
 static cin_cache		cinTable[MAX_VIDEO_HANDLES];
@@ -1273,19 +1289,28 @@ static void RoQShutdown( void ) {
 	}
 
 	if (cinTable[currentHandle].alterGameState) {
-		clc.state = CA_DISCONNECTED;
-		// we can't just do a vstr nextmap, because
-		// if we are aborting the intro cinematic with
-		// a devmap command, nextmap would be valid by
-		// the time it was referenced
-		s = Cvar_VariableString( "nextmap" );
-		if ( s[0] ) {
-			Cbuf_ExecuteText( EXEC_APPEND, va("%s\n", s) );
-			Cvar_Set( "nextmap", "" );
+		if (cinTable[currentHandle].restoreState) {
+			// inGameCinematic: resume the session instead of tearing it down
+			// (see CIN_StopBink -- EF ships .bik, but honour it either way)
+			clc.state = cinTable[currentHandle].savedState;
+			Cvar_Set( "timescale", "1" );
+			Cvar_Set( "skippingCinematic", "0" );
+		} else {
+			clc.state = CA_DISCONNECTED;
+			// we can't just do a vstr nextmap, because
+			// if we are aborting the intro cinematic with
+			// a devmap command, nextmap would be valid by
+			// the time it was referenced
+			s = Cvar_VariableString( "nextmap" );
+			if ( s[0] ) {
+				Cbuf_ExecuteText( EXEC_APPEND, va("%s\n", s) );
+				Cvar_Set( "nextmap", "" );
+			}
 		}
 		CL_handle = -1;
 	}
 	cinTable[currentHandle].fileName[0] = 0;
+	cinTable[currentHandle].restoreState = qfalse;
 	currentHandle = -1;
 }
 
@@ -1294,9 +1319,65 @@ static void RoQShutdown( void ) {
 CIN_StopCinematic
 ==================
 */
+/*
+==================
+CIN_StopBink
+
+The Bink counterpart of RoQShutdown.
+==================
+*/
+static void CIN_StopBink( int handle ) {
+	if ( cinTable[handle].binkState ) {
+		CIN_Bink_Close( cinTable[handle].binkState );
+		cinTable[handle].binkState = NULL;
+	}
+	cinTable[handle].buf    = NULL;
+	cinTable[handle].status = FMV_IDLE;
+
+	if ( cinTable[handle].alterGameState ) {
+		if ( cinTable[handle].restoreState ) {
+			// an inGameCinematic plays over a session that is still running, so
+			// resume it rather than disconnecting and advancing to nextmap
+			clc.state = cinTable[handle].savedState;
+
+			// the SP game DLL raises these for a scripted cutscene skip and
+			// relies on the video code to put them back, so that a skip only
+			// drops one section of a multi-part sequence (see SET_VIDEO_PLAY
+			// in Elite-Force-VR/game/Q3_Interface.cpp)
+			Cvar_Set( "timescale", "1" );
+			Cvar_Set( "skippingCinematic", "0" );
+		} else {
+			const char	*s;
+
+			clc.state = CA_DISCONNECTED;
+			s = Cvar_VariableString( "nextmap" );
+			if ( s[0] ) {
+				Cbuf_ExecuteText( EXEC_APPEND, va("%s\n", s) );
+				Cvar_Set( "nextmap", "" );
+			}
+		}
+		CL_handle = -1;
+	}
+
+	cinTable[handle].fileName[0]  = 0;
+	cinTable[handle].cinType      = CIN_TYPE_ROQ;
+	cinTable[handle].restoreState = qfalse;
+
+	if ( currentHandle == handle ) {
+		currentHandle = -1;
+	}
+}
+
 e_status CIN_StopCinematic(int handle) {
-	
+
 	if (handle < 0 || handle>= MAX_VIDEO_HANDLES || cinTable[handle].status == FMV_EOF) return FMV_EOF;
+
+	if ( cinTable[handle].cinType == CIN_TYPE_BINK ) {
+		Com_DPrintf( "trFMV::stop(), closing %s\n", cinTable[handle].fileName );
+		CIN_StopBink( handle );
+		return FMV_EOF;
+	}
+
 	currentHandle = handle;
 
 	Com_DPrintf("trFMV::stop(), closing %s\n", cinTable[currentHandle].fileName);
@@ -1331,6 +1412,43 @@ e_status CIN_RunCinematic (int handle)
 	int     thisTime = 0;
 
 	if (handle < 0 || handle>= MAX_VIDEO_HANDLES || cinTable[handle].status == FMV_EOF) return FMV_EOF;
+
+	if ( cinTable[handle].cinType == CIN_TYPE_BINK ) {
+		e_status	status;
+		byte		*buf = NULL;
+		qboolean	dirty = qfalse;
+
+		currentHandle = handle;
+
+		if ( cinTable[handle].alterGameState && clc.state != CA_CINEMATIC ) {
+			return cinTable[handle].status;
+		}
+		if ( cinTable[handle].status == FMV_IDLE ) {
+			return cinTable[handle].status;
+		}
+
+		status = CIN_Bink_Run( cinTable[handle].binkState, &buf, &dirty, cinTable[handle].looping );
+
+		if ( buf ) {
+			cinTable[handle].buf = buf;
+		}
+		if ( dirty ) {
+			cinTable[handle].dirty = qtrue;
+		}
+
+		if ( status == FMV_EOF ) {
+			if ( cinTable[handle].holdAtEnd ) {
+				cinTable[handle].status = FMV_IDLE;
+				return FMV_IDLE;
+			}
+			CIN_StopBink( handle );
+			return FMV_EOF;
+		}
+
+		// FMV_LOOPED just means the file restarted; playback continues
+		cinTable[handle].status = FMV_PLAY;
+		return cinTable[handle].status;
+	}
 
 	if (cin.currentHandle != handle) {
 		currentHandle = handle;
@@ -1396,9 +1514,101 @@ e_status CIN_RunCinematic (int handle)
 CIN_PlayCinematic
 ==================
 */
+/*
+==================
+CIN_PlayBink
+
+Opens a .bik through cl_cin_bink.c and fills in the same cin_cache fields the
+RoQ path does, so CIN_DrawCinematic and CIN_UploadCinematic stay format-blind.
+==================
+*/
+static int CIN_PlayBink( const char *name, int x, int y, int w, int h, int systemBits ) {
+	void	*state;
+	int		width = 0, height = 0;
+	int		handle;
+
+	state = CIN_Bink_Open( name, (qboolean)( ( systemBits & CIN_silent ) != 0 ), &width, &height );
+	if ( !state ) {
+		return -1;
+	}
+
+	handle = CIN_HandleForVideo();
+	Com_Memset( &cinTable[handle], 0, sizeof( cinTable[handle] ) );
+
+	Q_strncpyz( cinTable[handle].fileName, name, sizeof( cinTable[handle].fileName ) );
+	cinTable[handle].cinType   = CIN_TYPE_BINK;
+	cinTable[handle].binkState = state;
+	cinTable[handle].status    = FMV_PLAY;
+
+	cinTable[handle].CIN_WIDTH  = width;
+	cinTable[handle].CIN_HEIGHT = height;
+	cinTable[handle].drawX      = width;
+	cinTable[handle].drawY      = height;
+
+	CIN_SetExtents( handle, x, y, w, h );
+	CIN_SetLooping( handle, (qboolean)( ( systemBits & CIN_loop ) != 0 ) );
+
+	cinTable[handle].holdAtEnd      = (qboolean)( ( systemBits & CIN_hold ) != 0 );
+	cinTable[handle].alterGameState = (qboolean)( ( systemBits & CIN_system ) != 0 );
+	cinTable[handle].silent         = (qboolean)( ( systemBits & CIN_silent ) != 0 );
+	cinTable[handle].shader         = (qboolean)( ( systemBits & CIN_shader ) != 0 );
+	cinTable[handle].playonwalls    = 1;
+
+	if ( cinTable[handle].alterGameState ) {
+		// close the menu
+		if ( uivm ) {
+			VM_Call( uivm, UI_SET_ACTIVE_MENU, UIMENU_NONE );
+		}
+		clc.state = CA_CINEMATIC;
+		Con_Close();
+	} else {
+		cinTable[handle].playonwalls = cl_inGameVideo->integer;
+	}
+
+	currentHandle = handle;
+	return handle;
+}
+
+/*
+==================
+CIN_ResolveVideoFile
+
+Callers are inconsistent about the extension.  The MP UI builds "%s.roq"
+explicitly, but the EF scripts that drive inGameCinematic are compiled into the
+retail pk3s and may name a video either way, so each candidate is tried in turn.
+
+On success the file is left open in *f and its length is returned.
+==================
+*/
+static long CIN_ResolveVideoFile( const char *name, char *resolved, int resolvedSize, fileHandle_t *f ) {
+	static const char	*extensions[] = { "", ".bik", ".roq" };
+	int					i;
+
+	for ( i = 0 ; i < (int)ARRAY_LEN( extensions ) ; i++ ) {
+		long	len;
+
+		Com_sprintf( resolved, resolvedSize, "%s%s", name, extensions[i] );
+		len = FS_FOpenFileRead( resolved, f, qtrue );
+		if ( len > 0 && *f ) {
+			return len;
+		}
+		if ( *f ) {
+			FS_FCloseFile( *f );
+			*f = 0;
+		}
+	}
+
+	resolved[0] = 0;
+	return -1;
+}
+
 int CIN_PlayCinematic( const char *arg, int x, int y, int w, int h, int systemBits ) {
 	unsigned short RoQID;
 	char	name[MAX_OSPATH];
+	char	resolved[MAX_OSPATH];
+	fileHandle_t	probe = 0;
+	long	probeLen;
+	byte	header[16];
 	int		i;
 
 	if (strstr(arg, "/") == NULL && strstr(arg, "\\") == NULL) {
@@ -1407,15 +1617,31 @@ int CIN_PlayCinematic( const char *arg, int x, int y, int w, int h, int systemBi
 		Com_sprintf (name, sizeof(name), "%s", arg);
 	}
 
+	probeLen = CIN_ResolveVideoFile( name, resolved, sizeof( resolved ), &probe );
+	if ( probeLen <= 0 ) {
+		Com_DPrintf( "play(%s), no such video\n", arg );
+		return -1;
+	}
+	Q_strncpyz( name, resolved, sizeof( name ) );
+
 	if (!(systemBits & CIN_system)) {
 		for ( i = 0 ; i < MAX_VIDEO_HANDLES ; i++ ) {
 			if (!strcmp(cinTable[i].fileName, name) ) {
+				FS_FCloseFile( probe );
 				return i;
 			}
 		}
 	}
 
 	Com_DPrintf("CIN_PlayCinematic( %s )\n", arg);
+
+	Com_Memset( header, 0, sizeof( header ) );
+	FS_Read( header, sizeof( header ), probe );
+	FS_FCloseFile( probe );
+
+	if ( CIN_Bink_IsBinkHeader( header, sizeof( header ) ) ) {
+		return CIN_PlayBink( name, x, y, w, h, systemBits );
+	}
 
 	Com_Memset(&cin, 0, sizeof(cinematics_t) );
 	currentHandle = CIN_HandleForVideo();
@@ -1595,6 +1821,12 @@ void CIN_DrawCinematic (int handle) {
 
 	re.DrawStretchRaw( x, y, w, h, cinTable[handle].drawX, cinTable[handle].drawY, buf, handle, cinTable[handle].dirty);
 	cinTable[handle].dirty = qfalse;
+
+	if ( cinTable[handle].cinType == CIN_TYPE_BINK ) {
+		CIN_Bink_DrawFade( cinTable[handle].binkState,
+			cinTable[handle].xpos, cinTable[handle].ypos,
+			cinTable[handle].width, cinTable[handle].height );
+	}
 }
 
 void CL_PlayCinematic_f(void) {
@@ -1626,6 +1858,62 @@ void CL_PlayCinematic_f(void) {
 	}
 }
 
+
+/*
+==================
+CL_InGameCinematic_f
+
+The EF SP game DLL plays the pre-rendered sections of a cutscene by sending
+"inGameCinematic <video>" (ICARUS SET_VIDEO_PLAY, Q3_Interface.cpp).  Unlike the
+"cinematic" command, this one plays over a session that is still running: when
+the video ends control returns to the game instead of disconnecting and
+advancing to nextmap.
+==================
+*/
+void CL_InGameCinematic_f( void ) {
+	const char	*arg;
+	connstate_t	saved;
+	int			handle;
+
+	if ( Cmd_Argc() < 2 ) {
+		Com_Printf( "usage: inGameCinematic <video>\n" );
+		return;
+	}
+
+	if ( clc.state == CA_CINEMATIC ) {
+		SCR_StopCinematic();
+	}
+
+	arg   = Cmd_Argv( 1 );
+	saved = clc.state;
+
+	S_StopAllSounds();
+
+	handle = CIN_PlayCinematic( arg, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, CIN_system );
+	if ( handle < 0 ) {
+		Com_Printf( "inGameCinematic: cannot play %s\n", arg );
+		return;
+	}
+
+	CL_handle = handle;
+	cinTable[handle].restoreState = qtrue;
+	cinTable[handle].savedState   = saved;
+}
+
+/*
+==================
+CIN_IsInGameCinematic
+
+True while an inGameCinematic is playing, so that ESC skips back into the game
+instead of taking the normal CA_CINEMATIC route out to the main menu.
+==================
+*/
+qboolean CIN_IsInGameCinematic( void ) {
+	if ( CL_handle < 0 || CL_handle >= MAX_VIDEO_HANDLES ) {
+		return qfalse;
+	}
+	return cinTable[CL_handle].restoreState;
+}
 
 void SCR_DrawCinematic (void) {
 	if (CL_handle >= 0 && CL_handle < MAX_VIDEO_HANDLES) {

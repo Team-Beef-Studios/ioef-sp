@@ -771,8 +771,16 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 	}
 	for ( j = 0 ; ( 1 << j ) < rows ; j++ ) {
 	}
-	if ( ( 1 << i ) != cols || ( 1 << j ) != rows) {
-		ri.Error (ERR_DROP, "Draw_StretchRaw: size not a power of 2: %i by %i", cols, rows);
+	if ( ( 1 << i ) != cols || ( 1 << j ) != rows ) {
+		// EF's Bink cutscenes are 512x384.  This upload is the NPOT-safe case
+		// (no mipmaps, GL_LINEAR, GL_CLAMP_TO_EDGE), so allow it.
+		static qboolean warned = qfalse;
+
+		if ( !warned ) {
+			warned = qtrue;
+			ri.Printf( PRINT_DEVELOPER,
+				"Draw_StretchRaw: non-power-of-2 cinematic %i by %i\n", cols, rows );
+		}
 	}
 
 	GL_Bind( tr.scratchImage[client] );
@@ -781,16 +789,23 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 	if ( cols != tr.scratchImage[client]->width || rows != tr.scratchImage[client]->height ) {
 		tr.scratchImage[client]->width = tr.scratchImage[client]->uploadWidth = cols;
 		tr.scratchImage[client]->height = tr.scratchImage[client]->uploadHeight = rows;
-		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGB8, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
+		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );	
 	} else {
 		if (dirty) {
-			// otherwise, just subimage upload it so that drivers can tell we are going to be changing
-			// it and don't try and do a texture compression
-			qglTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data );
+			if ( ( cols & ( cols - 1 ) ) == 0 && ( rows & ( rows - 1 ) ) == 0 ) {
+				// otherwise, just subimage upload it so that drivers can tell we are going to be changing
+				// it and don't try and do a texture compression
+				qglTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data );
+			} else {
+				// Non-power-of-two: gl4es on Quest rejects a sub-rectangle upload
+				// into such a texture with GL_INVALID_OPERATION, so re-specify in
+				// full.  Verified on device.
+				qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
+			}
 		}
 	}
 
@@ -813,6 +828,27 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 	qglTexCoord2f ( 0.5f / cols, ( rows - 0.5f ) / rows );
 	qglVertex2f (x, y+h);
 	qglEnd ();
+
+	// WORKAROUND, mechanism not understood.  Under gl4es on Quest the
+	// immediate-mode quad above never reaches the eye buffer on its own: the
+	// buffer reads back pure black and the headset shows nothing, while audio
+	// plays normally.  It becomes visible as soon as any ordinary queued 2D draw
+	// follows it in the same frame.  Deferring the quad onto the render queue, a
+	// glFinish after it, switching it to vertex arrays, and drawing it as a
+	// StretchPic over the scratch image were each tried on device and none of
+	// them worked -- only a subsequent StretchPic does.  So issue one here, fully
+	// transparent, which changes nothing on screen but performs the draw.
+	{
+		static const float	clear[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		qhandle_t			flushShader;
+
+		flushShader = RE_RegisterShaderFromImage( "*cinflush", LIGHTMAP_2D,
+			tr.whiteImage, qfalse );
+
+		RE_SetColor( clear );
+		RE_StretchPic( 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, flushShader );
+		RE_SetColor( NULL );
+	}
 }
 
 void RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty) {
@@ -823,16 +859,23 @@ void RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int
 	if ( cols != tr.scratchImage[client]->width || rows != tr.scratchImage[client]->height ) {
 		tr.scratchImage[client]->width = tr.scratchImage[client]->uploadWidth = cols;
 		tr.scratchImage[client]->height = tr.scratchImage[client]->uploadHeight = rows;
-		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGB8, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
+		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );	
 	} else {
 		if (dirty) {
-			// otherwise, just subimage upload it so that drivers can tell we are going to be changing
-			// it and don't try and do a texture compression
-			qglTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data );
+			if ( ( cols & ( cols - 1 ) ) == 0 && ( rows & ( rows - 1 ) ) == 0 ) {
+				// otherwise, just subimage upload it so that drivers can tell we are going to be changing
+				// it and don't try and do a texture compression
+				qglTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data );
+			} else {
+				// Non-power-of-two: gl4es on Quest rejects a sub-rectangle upload
+				// into such a texture with GL_INVALID_OPERATION, so re-specify in
+				// full.  Verified on device.
+				qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
+			}
 		}
 	}
 }

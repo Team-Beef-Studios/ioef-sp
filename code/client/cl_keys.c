@@ -1252,6 +1252,13 @@ void CL_KeyDownEvent( int key, unsigned time )
 			return;
 		}
 #endif
+		// an inGameCinematic plays over a session that is still running, so
+		// skipping it resumes the game rather than dropping out to the main menu
+		if ( clc.state == CA_CINEMATIC && CIN_IsInGameCinematic() ) {
+			SCR_StopCinematic();
+			return;
+		}
+
 		if ( !( Key_GetCatcher( ) & KEYCATCH_UI ) ) {
 			if ( clc.state == CA_ACTIVE && !clc.demoplaying ) {
 				VM_Call( uivm, UI_SET_ACTIVE_MENU, UIMENU_INGAME );

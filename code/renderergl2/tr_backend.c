@@ -755,8 +755,16 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 	}
 	for ( j = 0 ; ( 1 << j ) < rows ; j++ ) {
 	}
-	if ( ( 1 << i ) != cols || ( 1 << j ) != rows) {
-		ri.Error (ERR_DROP, "Draw_StretchRaw: size not a power of 2: %i by %i", cols, rows);
+	if ( ( 1 << i ) != cols || ( 1 << j ) != rows ) {
+		// EF's Bink cutscenes are 512x384.  This upload is the NPOT-safe case
+		// (no mipmaps, GL_LINEAR, GL_CLAMP_TO_EDGE), so allow it.
+		static qboolean warned = qfalse;
+
+		if ( !warned ) {
+			warned = qtrue;
+			ri.Printf( PRINT_DEVELOPER,
+				"Draw_StretchRaw: non-power-of-2 cinematic %i by %i\n", cols, rows );
+		}
 	}
 
 	RE_UploadCinematic (w, h, cols, rows, data, client, dirty);
@@ -808,16 +816,23 @@ void RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int
 	if ( cols != tr.scratchImage[client]->width || rows != tr.scratchImage[client]->height ) {
 		tr.scratchImage[client]->width = tr.scratchImage[client]->uploadWidth = cols;
 		tr.scratchImage[client]->height = tr.scratchImage[client]->uploadHeight = rows;
-		qglTextureImage2D(texture, GL_TEXTURE_2D, 0, GL_RGB8, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		// GL_RGBA, not GL_RGB8: GLES requires the internal format to match the data.
+		qglTextureImage2D(texture, GL_TEXTURE_2D, 0, GL_RGBA, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 		qglTextureParameterf(texture, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		qglTextureParameterf(texture, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
 		qglTextureParameterf(texture, GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		qglTextureParameterf(texture, GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	} else {
 		if (dirty) {
-			// otherwise, just subimage upload it so that drivers can tell we are going to be changing
-			// it and don't try and do a texture compression
-			qglTextureSubImage2D(texture, GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data);
+			if ( ( cols & ( cols - 1 ) ) == 0 && ( rows & ( rows - 1 ) ) == 0 ) {
+				// otherwise, just subimage upload it so that drivers can tell we are going to be changing
+				// it and don't try and do a texture compression
+				qglTextureSubImage2D(texture, GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data);
+			} else {
+				// Non-power-of-two: a sub-rectangle upload into such a texture is
+				// rejected by gl4es on Quest, so re-specify in full.
+				qglTextureImage2D(texture, GL_TEXTURE_2D, 0, GL_RGBA, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+			}
 		}
 	}
 }

@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cl_main.c  -- client main loop
 
 #include "client.h"
+#include "cl_cin_bink.h"
 #include <limits.h>
 
 #include "../sys/sys_local.h"
@@ -3820,6 +3821,8 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("demo", CL_PlayDemo_f);
 	Cmd_SetCommandCompletionFunc( "demo", CL_CompleteDemoName );
 	Cmd_AddCommand ("cinematic", CL_PlayCinematic_f);
+	// EF SP scripts play their pre-rendered cutscene sections through this
+	Cmd_AddCommand ("inGameCinematic", CL_InGameCinematic_f);
 	Cmd_AddCommand ("stoprecord", CL_StopRecord_f);
 	Cmd_AddCommand ("connect", CL_Connect_f);
 	Cmd_AddCommand ("reconnect", CL_Reconnect_f);
@@ -3842,6 +3845,7 @@ void CL_Init( void ) {
 	CL_InitRef();
 
 	SCR_Init ();
+	CIN_Bink_Init ();
 
 //	Cbuf_Execute ();
 
@@ -3898,6 +3902,7 @@ void CL_Shutdown(char *finalmsg, qboolean disconnect, qboolean quit)
 	Cmd_RemoveCommand ("record");
 	Cmd_RemoveCommand ("demo");
 	Cmd_RemoveCommand ("cinematic");
+	Cmd_RemoveCommand ("inGameCinematic");
 	Cmd_RemoveCommand ("stoprecord");
 	Cmd_RemoveCommand ("connect");
 	Cmd_RemoveCommand ("reconnect");

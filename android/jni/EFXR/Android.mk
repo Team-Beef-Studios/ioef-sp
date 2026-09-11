@@ -30,6 +30,7 @@ LOCAL_CFLAGS := \
     -DUSE_LOCAL_HEADERS=1 \
     -DNO_VM_COMPILED \
     -DUSE_CODEC_MP3=1 \
+    -DUSE_BINK=1 \
     -fvisibility=hidden -fno-strict-aliasing -Wno-write-strings \
     -fcommon
 # -fcommon: the static-linked renderer and the engine each have a tentative
@@ -51,6 +52,7 @@ LOCAL_C_INCLUDES := \
     $(LOCAL_PATH)/renderercommon \
     $(LOCAL_PATH)/renderergl1 \
     $(LOCAL_PATH)/jpeg-8c \
+    $(LOCAL_PATH)/binkdec \
     $(LOCAL_PATH)/vr \
     $(LOCAL_PATH)/vr/android \
     $(LOCAL_PATH)/vr/openxr \
@@ -84,6 +86,8 @@ SERVER_SRC   := $(filter-out $(LOCAL_PATH)/server/sv_rankings.c,$(SERVER_SRC))
 BOTLIB_SRC   := $(wildcard $(LOCAL_PATH)/botlib/*.c)
 RENDC_SRC    := $(wildcard $(LOCAL_PATH)/renderercommon/*.c)
 JPEG_SRC     := $(wildcard $(LOCAL_PATH)/jpeg-8c/*.c)
+# Bink (.bik) video decode -- the EF cutscenes ship as Bink, not RoQ.
+BINK_SRC     := $(wildcard $(LOCAL_PATH)/binkdec/*.c)
 
 # GL1 renderer minus the SDL glimp/gamma (replaced by the Android VR glimp).
 ALL_RGL1     := $(wildcard $(LOCAL_PATH)/renderergl1/*.c)
@@ -110,7 +114,8 @@ VR_SRC       := $(LOCAL_PATH)/vr/VrInputCommon.c \
                 $(LOCAL_PATH)/vr/android/snd_opensles.c
 
 ENGINE_SRC := $(QCOMMON_SRC) $(CLIENT_SRC) $(SERVER_SRC) $(BOTLIB_SRC) \
-              $(RENDC_SRC) $(RGL1_SRC) $(JPEG_SRC) $(SYS_SRC) $(VR_SRC)
+              $(RENDC_SRC) $(RGL1_SRC) $(JPEG_SRC) $(BINK_SRC) \
+              $(SYS_SRC) $(VR_SRC)
 
 # ndk-build wants LOCAL_SRC_FILES relative to LOCAL_PATH.
 LOCAL_SRC_FILES := $(ENGINE_SRC:$(LOCAL_PATH)/%=%)
