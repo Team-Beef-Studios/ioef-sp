@@ -1,0 +1,45 @@
+===============================================================================
+ELITE FORCE VR - CONTROLS
+===============================================================================
+
+Default layout: right handed, Swap Sticks off.
+Your weapon is in your RIGHT hand.
+
+-------------------------------------------------------------------------------
+MOVEMENT
+-------------------------------------------------------------------------------
+
+  Left stick                Walk / strafe
+  Right stick  (left/right) Turn
+  Right stick  (pull down)  Crouch  (toggle - pull down again to stand)
+  Left stick   (click)      Walk / run toggle
+  A                         Jump
+
+-------------------------------------------------------------------------------
+WEAPONS
+-------------------------------------------------------------------------------
+
+  Right trigger             Fire
+  B                         Alt fire
+  Right grip  (hold)        Weapon wheel - point at a weapon, release to take it
+
+Both fire controls are on your weapon hand. The off hand trigger does nothing.
+
+
+-------------------------------------------------------------------------------
+ITEMS AND INFORMATION
+-------------------------------------------------------------------------------
+
+  Right stick (click)       Use  (doors, panels, consoles)
+  Left grip   (hold)        Inventory wheel - tricorder, hypos, save, load
+  X           (hold)        Mission objectives
+  Y                         Open / close the game menu
+  Menu button (either hand) Open / close the game menu
+
+
+-------------------------------------------------------------------------------
+CUTSCENES
+-------------------------------------------------------------------------------
+
+  A                         Skip the cutscene
+
