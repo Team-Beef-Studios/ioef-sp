@@ -213,6 +213,7 @@ typedef struct {
 	qboolean (*VR_GetFovTangents)( float *tanLeft, float *tanRight, float *tanUp, float *tanDown );
 	qboolean (*VR_GetFovTangentsForEye)( int eye, float *tanLeft, float *tanRight, float *tanUp, float *tanDown );
 	float (*VR_GetEyeStereoSeparation)( int eye );
+	float (*VR_GetScopeZoom)( void );
 #endif
 } refimport_t;
 

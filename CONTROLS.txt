@@ -25,6 +25,26 @@ WEAPONS
 
 Both fire controls are on your weapon hand. The off hand trigger does nothing.
 
+TWO HANDED WEAPONS
+  Put your left hand in front of your right hand, along the gun, and hold the
+  left grip. The gun now points from your right hand to your left hand. This
+  steadies the aim and cuts the spread of the Scavenger rifle and the Tetrion
+  disruptor to one third. Let go of the grip to return to one hand.
+  If your left hand is not in front of the gun, the left grip opens the
+  inventory wheel as usual.
+
+COMPRESSION RIFLE SCOPE
+  Hold the compression rifle with both hands and bring it up to your face.
+  The scope opens and zooms the view. You move at one third speed while you
+  look through the scope. Push the right thumbstick up to zoom in and pull it
+  down to zoom out. The small red cross in the centre shows where the shot
+  hits. The HUD is hidden while the scope is open. Lower the rifle or let go
+  of the left grip to close the scope.
+
+CROSSHAIR
+  The crosshair shows where your weapon points, on the surface it hits.
+  Pick it in the Preferences menu (Crosshair). Pick "None" to turn it off.
+
 
 -------------------------------------------------------------------------------
 ITEMS AND INFORMATION
@@ -35,6 +55,11 @@ ITEMS AND INFORMATION
   X           (hold)        Mission objectives
   Y                         Open / close the game menu
   Menu button (either hand) Open / close the game menu
+
+IN MENUS
+  Point a controller at the menu to move the cursor. Pull its trigger to
+  click. Pull the trigger on the other hand to point with that hand instead.
+  A also clicks. B, Y or the menu button goes back.
 
 
 -------------------------------------------------------------------------------

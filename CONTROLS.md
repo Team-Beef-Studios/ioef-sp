@@ -59,8 +59,8 @@ time the highlight moves to a new slot.
         Proton Gun
 ```
 
-A weapon you own but have no ammo for stays on the ring, greyed out and not
-selectable, rather than disappearing.
+A weapon you own but have no ammo for shows as a see-through red hologram.
+You cannot select it.
 
 ## Quick reference table
 
@@ -80,6 +80,8 @@ selectable, rather than disappearing.
 | Left (off-hand) | X button, hold | Mission-objectives info screen | `VrInputCommon.c:858` |
 | Left (off-hand) | Y button | Open in-game menu (Esc) | `VrInputCommon.c:868` |
 | Either hand | Menu/≡ button | Open in-game menu (Esc) | `VrInputCommon.c:868` |
+| Menus | Point either controller; its trigger clicks; the other hand's trigger takes the pointer over (JKXR) | Cursor position is absolute (`CL_SP_UIMouseEventAbs` -> UI `UI_MouseEventAbs`) | `VrInputCommon.c` |
+| Menus | A clicks; B, Y or Menu/≡ goes back | | `VrInputCommon.c` |
 | Both hands | Both triggers + both grips, hold 3s | Full loadout — all weapons, max ammo, full health/armour (`vr_cheat_chord`, on by default) | `VrInputCommon.c:613` |
 
 ## Movement orientation

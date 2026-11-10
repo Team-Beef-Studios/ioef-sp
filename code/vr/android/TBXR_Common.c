@@ -1472,6 +1472,13 @@ void TBXR_submitFrame()
 		for (int eye = 0; eye < ovrMaxNumEyes; eye++)
 		{
 			XrFovf fov = gAppState.Views[eye].fov;
+			if (vr.scopeactive)
+			{
+				fov.angleLeft  /= 1.05f;
+				fov.angleRight /= 1.05f;
+				fov.angleUp    /= 1.05f;
+				fov.angleDown  /= 1.05f;
+			}
 
 			memset(&projection_layer_elements[eye], 0, sizeof(XrCompositionLayerProjectionView));
 			projection_layer_elements[eye].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;

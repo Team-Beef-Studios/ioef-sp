@@ -220,6 +220,7 @@ typedef struct {
 	void		(*UI_DrawConnectText)( const char *servername, const char *updateInfoString );
 	void		(*UI_UpdateConnectionString)( char *string );
 	void		(*UI_UpdateConnectionMessageString)( char *string );
+	void		(*UI_MouseEventAbs)( int x, int y );	// must match the DLL's uiexport_t
 } sp_uiexport_t;
 
 // ============================================================================
@@ -1201,6 +1202,14 @@ void CL_SP_UIUpdateConnectionString( const char *string ) {
 	if ( ue && ue->UI_UpdateConnectionString ) {
 		ue->UI_UpdateConnectionString( (char *)string );
 	}
+}
+
+qboolean CL_SP_UIMouseEventAbs( int x, int y ) {
+	if ( ue && ue->UI_MouseEventAbs && ( Key_GetCatcher() & KEYCATCH_UI ) ) {
+		ue->UI_MouseEventAbs( x, y );
+		return qtrue;
+	}
+	return qfalse;
 }
 
 void CL_SP_UIUpdateConnectionMessageString( const char *string ) {

@@ -3420,6 +3420,7 @@ void CL_InitRef( void ) {
 	ri.VR_GetFovTangents = VR_GetFovTangents;
 	ri.VR_GetFovTangentsForEye = VR_GetFovTangentsForEye;
 	ri.VR_GetEyeStereoSeparation = VR_GetEyeStereoSeparation;
+	ri.VR_GetScopeZoom = VR_GetScopeZoom;
 #endif
 
 	ret = GetRefAPI( REF_API_VERSION, &ri );

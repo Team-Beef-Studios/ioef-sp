@@ -576,7 +576,11 @@ void CL_FinishMove( usercmd_t *cmd ) {
 	if ( VR_IsActive() ) {
 		static float    s_lastHmdYaw = 0.0f;
 		static qboolean s_haveHmd    = qfalse;
-		float           hmdYaw = vr.hmdorientation[YAW];
+		// scoped: the view follows the weapon, not the head
+		float           hmdYaw = vr.scopeactive ? vr.weaponangles[ANGLES_ADJUSTED][YAW]
+		                                        : vr.hmdorientation[YAW];
+		float           hmdPitch = vr.scopeactive ? vr.weaponangles[ANGLES_ADJUSTED][PITCH]
+		                                          : vr.hmdorientation[PITCH];
 
 		// YAW: apply the per-frame HMD yaw CHANGE so it composes with mouse
 		// turning and preserves the server's spawn view baseline (delta_angles).
@@ -601,7 +605,7 @@ void CL_FinishMove( usercmd_t *cmd ) {
 		// headset was tilted at game start.  Pre-subtracting it makes the resulting
 		// ps.viewangles[PITCH] equal the true HMD pitch -> fire matches look.
 		// (YAW avoids this by composing incrementally just above.)
-		cl.viewangles[PITCH] = vr.hmdorientation[PITCH] - SHORT2ANGLE(cl.snap.ps.delta_angles[PITCH]);
+		cl.viewangles[PITCH] = hmdPitch - SHORT2ANGLE(cl.snap.ps.delta_angles[PITCH]);
 
 		// Thumbstick turn (snap or smooth): apply the per-frame yaw delta from the
 		// VR layer INCREMENTALLY, exactly like the HMD yaw above, so it composes

@@ -33,6 +33,9 @@ cvar_t	*vr_cheat_chord;
 cvar_t	*vr_wheels;
 cvar_t	*vr_wheel_timescale;
 cvar_t	*vr_wheel_modelscale;
+cvar_t	*vr_two_handed_weapons;
+cvar_t	*vr_scope_engage_distance;
+cvar_t	*vr_scope_fov;
 
 void VR_InitCvars(void)
 {
@@ -97,4 +100,8 @@ void VR_InitCvars(void)
 	// Size multiplier for the wheel slot models.  Each model is first normalised
 	// to a uniform size, so 1.0 is "as intended" regardless of the weapon.
 	vr_wheel_modelscale      = Cvar_Get( "vr_wheel_modelscale", "1.0", CVAR_ARCHIVE );
+	vr_two_handed_weapons    = Cvar_Get( "vr_two_handed_weapons", "1", CVAR_ARCHIVE );
+	// metres from the headset
+	vr_scope_engage_distance = Cvar_Get( "vr_scope_engage_distance", "0.25", CVAR_ARCHIVE );
+	vr_scope_fov             = Cvar_Get( "vr_scope_fov", "30", CVAR_ARCHIVE );
 }

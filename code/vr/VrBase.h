@@ -43,6 +43,7 @@ qboolean VR_GetFovTangentsForEye( int eye, float *tanLeft, float *tanRight, floa
    for the given eye, giving stereo (IPD) parallax.  Derived from the actual
    OpenXR eye poses * vr_worldscale.  Apply along refdef viewaxis[1]. */
 float    VR_GetEyeStereoSeparation( int eye );
+float    VR_GetScopeZoom( void );
 
 /* 6DoF positional head tracking.  HORIZONTAL: physical lean/step -> player
    movement (RealRTCWXR-style) -- forward/side outputs scaled by 127 into the

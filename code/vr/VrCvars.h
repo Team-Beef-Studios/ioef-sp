@@ -39,6 +39,9 @@ extern cvar_t	*vr_cheat_chord;
 extern cvar_t	*vr_wheels;
 extern cvar_t	*vr_wheel_timescale;
 extern cvar_t	*vr_wheel_modelscale;
+extern cvar_t	*vr_two_handed_weapons;
+extern cvar_t	*vr_scope_engage_distance;
+extern cvar_t	*vr_scope_fov;
 
 void VR_InitCvars(void);
 

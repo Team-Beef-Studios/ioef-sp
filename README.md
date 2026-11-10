@@ -29,6 +29,9 @@ and adds:
   fire, stick-click crouch, face-button jump/use, and a laser-pointer for menus.
 - **Radial weapon & inventory wheels** — hold a grip for a JKXR-style selector
   wheel of 3D weapon models, with time dilation while it's open.
+- **Two-handed weapons, rifle scope and 3D crosshair** — JKXR's two-handed hold
+  (with reduced spread), its scope (on the compression rifle) and its
+  world-space crosshair.
 - **Motion-controlled weapons** — every weapon the player carries, plus the
   tricorder and hypos, renders at the dominant controller and fires along the
   controller's muzzle direction.
@@ -165,8 +168,34 @@ nothing highlighted to cancel. Each slot shows the item's own model,
 auto-sized so every weapon reads at the same size (`vr_wheel_modelscale`
 multiplies it) and turning slowly so you can see it from every angle. Time slows
 to `vr_wheel_timescale` (0.22) while a wheel is up. Releasing on a hypo uses it
-immediately; a weapon you're out of ammo for stays on the ring greyed out. This
+immediately; a weapon you're out of ammo for shows as a see-through red hologram
+(`z_vr_assets_base/scripts/vr_wheel.shader`) and cannot be picked. This
 is a port of JKXR's item selector; see [`CONTROLS.md`](CONTROLS.md).
+
+**Two-handed weapons** (`vr_two_handed_weapons 1`, on by default) are a port of
+JKXR's. Press the off-hand grip with the off hand held along the weapon's line
+(in front of the weapon hand) and the weapon then points from the weapon hand to
+the off hand, with roll halved; the off-hand grip anywhere else still opens the
+inventory wheel. While held, the Scavenger rifle and Tetrion disruptor spread is
+cut to a third (`G_VRSpreadScale` in Elite-Force-VR `game/g_weapon.cpp`). The
+weapon wheel cannot open during a two-handed hold.
+
+The **compression rifle scope** is JKXR's E-11 scope. Hold the rifle with both
+hands within `vr_scope_engage_distance` (0.25 m) of the headset and the engine
+sends `enterscope`; the cgame turns on its locked zoom and reports it back in
+`vr->scopeactive`. While scoped the view is mono, aims from the eye toward the
+off hand, zooms the headset projection by `fov_x / vr_scope_fov` (`VR_GetScopeZoom`,
+applied in `R_SetupProjection`), drops the 6DoF positional movement and moves at
+a third speed. The turn-stick Y axis changes `vr_scope_fov` (5 to 60 degrees,
+default 30, remembered) and does not crouch while scoped. EF's zoom mask is drawn
+(without its scanline stage, `z_vr_assets_base/scripts/vr_scope.shader`)
+with a vignette and a small centre reticle, and the gameplay HUD is hidden. The
+shot fires from just below the eye toward the point under the reticle.
+
+The **crosshair** is JKXR's 3D crosshair: a sprite where the weapon's line of
+fire meets the world, sized by distance. It uses `cg_drawCrosshair` (the
+Preferences menu's crosshair picker; 0 = off) and replaces the 2D crosshair in
+VR.
 
 Note that the off-hand **grip** therefore no longer crouches — crouch is the
 off-hand **thumbstick click**, and it now **toggles** (jumping cancels it).

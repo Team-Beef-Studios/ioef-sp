@@ -125,6 +125,10 @@ turn delta to cl.viewangles[YAW] (same incremental model as the HMD yaw).
    weapons.h in the Elite-Force-VR repo (FIRST_WEAPON .. LAST_VR_WEAPON is the
    range that is motion-controlled and therefore alignable). */
 #define EF_WP_FIRST               1    /* WP_PHASER      */
+#define EF_WP_COMPRESSION_RIFLE   2
+#define VR_SCOPE_FOV_MIN	5.0f
+#define VR_SCOPE_FOV_MAX	60.0f
+#define EF_WP_LAST_GUN           10    /* WP_PROTON_GUN */
 #define EF_WP_LAST_VR            14    /* WP_RED_HYPO    */
 
 /* How long both triggers + both grips must be held to fire the "give all"
@@ -144,18 +148,22 @@ static float vr_turnDelta         = 0.0f;   /* yaw delta to apply this frame  */
    VR menu laser-pointer (ported from RealRTCWXR VrInputCommon.c).
    When a 2D menu/console is up it is drawn on a quad facing
    vr.hmdorientation_snap[YAW]; we map the pointing controller's yaw/pitch
-   (relative to that snapped facing) to a normalised cursor and feed it to the
-   UI as relative mouse deltas, with the trigger / face button as left-click.
+   (relative to that snapped facing) to a normalised cursor and set the UI
+   cursor to it, with the trigger / face button as left-click.
    ------------------------------------------------------------------------ */
 
-// Normalised (0..1) cursor -> engine virtual 640x480 UI space, fed as a RELATIVE
-// mouse delta (the UI accumulates deltas; we track the previous absolute pos).
+// Normalised (0..1) cursor -> engine virtual 640x480 UI space.
 static void VR_MenuMouseAbs(float x, float y)
 {
 	static int ox = 0, oy = 0;
 	int absx = (int)(x * 640.0f);
 	int absy = (int)(y * 480.0f);
-	CL_MouseEvent(absx - ox, absy - oy, 0);
+
+	// absolute, as JKXR: relative deltas drift once the UI clamps the cursor at an edge
+	if (!CL_SP_UIMouseEventAbs(absx, absy))
+	{
+		CL_MouseEvent(absx - ox, absy - oy, 0);
+	}
 	ox = absx;
 	oy = absy;
 }
@@ -230,6 +238,120 @@ static void VR_CacheControllerPoses(const ovrTrackedController *pDomTrack,
 			pOffTrack->Pose.position.y,
 			pOffTrack->Pose.position.z);
 		VectorSubtract(vr.offhandposition[0], vr.hmdposition, vr.offhandoffset);
+	}
+}
+
+static qboolean VR_OffHandSteadiesWeapon(const ovrTrackedController *pDomTrack,
+                                         const ovrTrackedController *pOffTrack)
+{
+	vec3_t dir, weaponposition, offhandposition;
+	vec3_t weaponangles, weaponForward, rotation = {0.0f, 0.0f, 0.0f};
+	int    weapon = cl.snap.ps.weapon;
+
+	if (weapon < EF_WP_FIRST || weapon > EF_WP_LAST_GUN)
+	{
+		return qfalse;
+	}
+
+	VectorSet(weaponposition, pDomTrack->Pose.position.z,
+	          pDomTrack->Pose.position.x, pDomTrack->Pose.position.y);
+	VectorSet(offhandposition, pOffTrack->Pose.position.z,
+	          pOffTrack->Pose.position.x, pOffTrack->Pose.position.y);
+	VectorSubtract(weaponposition, offhandposition, dir);
+	VectorNormalize(dir);
+
+	rotation[PITCH] = vr_weapon_pitchadjust->value;
+	QuatToYawPitchRoll(pDomTrack->Pose.orientation, rotation, weaponangles);
+	AngleVectors(weaponangles, weaponForward, NULL, NULL);
+	VectorNormalize(weaponForward);
+
+	return (qboolean)(DotProduct(weaponForward, dir) > 0.6f);
+}
+
+static void VR_UpdateScope(void)
+{
+	float weaponDist;
+
+	if (vr.cin_camera)
+	{
+		return;
+	}
+
+	weaponDist = VectorLength(vr.weaponoffset);
+
+	if (cl.snap.ps.weapon == EF_WP_COMPRESSION_RIFLE && cl.snap.ps.stats[0] > 0)
+	{
+		if (vr.weapon_stabilised &&
+		    weaponDist < vr_scope_engage_distance->value &&
+		    !vr.scopeactive)
+		{
+			Cbuf_AddText("enterscope\n");
+		}
+		else if ((weaponDist > vr_scope_engage_distance->value + 0.01f || !vr.weapon_stabilised) &&
+		         vr.scopeactive)
+		{
+			Cbuf_AddText("exitscope\n");
+		}
+	}
+	else if (vr.scopeactive)
+	{
+		// weapon changed under us, e.g. out of ammo
+		Cbuf_AddText("exitscope\n");
+	}
+}
+
+static void VR_ApplyTwoHandedAim(void)
+{
+	vec3_t avg, delta;
+	float  zxDist;
+	int    i;
+
+	if (cl.snap.ps.weapon < EF_WP_FIRST || cl.snap.ps.weapon > EF_WP_LAST_GUN)
+	{
+		vr.weapon_stabilised = qfalse;
+	}
+
+	if (!vr.weapon_stabilised)
+	{
+		return;
+	}
+
+	if (vr.scopeactive)
+	{
+		VectorClear(avg);
+		for (i = 0; i < 5; ++i)
+		{
+			VectorAdd(avg, vr.offhandposition[i], avg);
+		}
+		VectorScale(avg, 0.2f, avg);
+
+		// lift the muzzle slightly so it lines up with the headset
+		delta[0] = avg[0] - vr.hmdposition[0];
+		delta[1] = (avg[1] + 0.12f) - vr.hmdposition[1];
+		delta[2] = avg[2] - vr.hmdposition[2];
+	}
+	else
+	{
+		VectorSubtract(vr.offhandposition[0], vr.weaponposition, delta);
+	}
+
+	zxDist = length(delta[0], delta[2]);
+	if (zxDist == 0.0f || delta[2] == 0.0f)
+	{
+		return;
+	}
+
+	VectorSet(vr.weaponangles[ANGLES_ADJUSTED],
+	          -RAD2DEG(atanf(delta[1] / zxDist)),
+	          -RAD2DEG(atan2f(delta[0], -delta[2])),
+	          vr.weaponangles[ANGLES_ADJUSTED][ROLL] / 2.0f);
+	VectorSubtract(vr.weaponangles[ANGLES_ADJUSTED], vr.weaponangles_last[ANGLES_ADJUSTED],
+	               vr.weaponangles_delta[ANGLES_ADJUSTED]);
+
+	if (vr.scopeactive)
+	{
+		VectorClear(vr.weaponoffset);
+		VectorCopy(vr.hmdposition, vr.weaponposition);
 	}
 }
 
@@ -633,16 +755,33 @@ void VR_HandleControllerInput()
 	qboolean menuActive = (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CONSOLE)) != 0;
 	if (menuActive)
 	{
-		// Aim the dominant controller at the menu quad (which faces
-		// hmdorientation_snap[YAW]) and map yaw/pitch to the UI cursor.
+		// as JKXR: either hand can point; the other hand's trigger takes the pointer over
+		static qboolean menuOffHandPoints = qfalse;
+		ovrInputStateTrackedRemote *pPoint    = menuOffHandPoints ? pOff : pDom;
+		ovrInputStateTrackedRemote *pPointOld = menuOffHandPoints ? pOffOld : pDomOld;
+		ovrInputStateTrackedRemote *pOther    = menuOffHandPoints ? pDom : pOff;
+		ovrInputStateTrackedRemote *pOtherOld = menuOffHandPoints ? pDomOld : pOffOld;
 		vec3_t zero = {0.0f, 0.0f, 0.0f};
 		vec3_t aimAngles;
-		QuatToYawPitchRoll(pDomTrack->Pose.orientation, zero, aimAngles);
+
+		if ((pOther->Buttons & xrButton_Trigger) && !(pOtherOld->Buttons & xrButton_Trigger))
+		{
+			if (pPointOld->Buttons & xrButton_Trigger)
+			{
+				CL_KeyEvent(K_MOUSE1, qfalse, Sys_Milliseconds());
+			}
+			menuOffHandPoints = !menuOffHandPoints;
+		}
+		else
+		{
+			VR_MenuButtonKey(pPoint, pPointOld, xrButton_Trigger, K_MOUSE1);
+		}
+
+		QuatToYawPitchRoll((menuOffHandPoints ? pOffTrack : pDomTrack)->Pose.orientation, zero, aimAngles);
 		VR_MenuPoint(vr.hmdorientation_snap[YAW], aimAngles);
 
-		// Click: dominant trigger or face button 1 -> left mouse button.
-		VR_MenuButtonKey(pDom, pDomOld, xrButton_Trigger, K_MOUSE1);
 		VR_MenuButtonKey(pFace1, pFace1Old, domFace1,     K_MOUSE1);
+		VR_MenuButtonKey(pDom, pDomOld, domFace2, K_ESCAPE);
 		// Menu/back button (either hand) -> Escape (back out / close the menu).
 		VR_MenuButtonKey(&leftTrackedRemoteState_new,  &leftTrackedRemoteState_old,  xrButton_Enter, K_ESCAPE);
 		VR_MenuButtonKey(&rightTrackedRemoteState_new, &rightTrackedRemoteState_old, xrButton_Enter, K_ESCAPE);
@@ -709,6 +848,23 @@ void VR_HandleControllerInput()
 	// inventory wheel; release commits whatever the controller is pointing at.
 	// vr.item_selector (1 = weapons, 2 = inventory) is read by the cgame, which
 	// draws the wheel and owns the selection; we only open and close it.
+	// decided on the press, so the inventory wheel never flashes up first
+	{
+		qboolean offGripNow = (pOff->Buttons    & xrButton_GripTrigger) != 0;
+		qboolean offGripWas = (pOffOld->Buttons & xrButton_GripTrigger) != 0;
+
+		if (!offGripNow)
+		{
+			vr.weapon_stabilised = qfalse;
+		}
+		else if (!offGripWas && vr_two_handed_weapons->integer &&
+		         vr.item_selector == 0 && !vr.cin_camera &&
+		         VR_OffHandSteadiesWeapon(pDomTrack, pOffTrack))
+		{
+			vr.weapon_stabilised = qtrue;
+		}
+	}
+
 	if (vr_wheels->integer && !cheatChord)
 	{
 		qboolean domGripNow = (pDom->Buttons    & xrButton_GripTrigger) != 0;
@@ -720,7 +876,7 @@ void VR_HandleControllerInput()
 		{
 			// Not during a scripted cinematic -- the grips are quiet there and the
 			// player is trying to watch, not shop.
-			if (!vr.cin_camera)
+			if (!vr.cin_camera && !vr.weapon_stabilised && !vr.scopeactive)
 			{
 				if (domGripNow && !domGripWas)
 					vr.item_selector = 1;
@@ -755,6 +911,11 @@ void VR_HandleControllerInput()
 		return;
 	}
 
+	// order matters: the scope test reads the real weapon offset, which the
+	// scoped aim then clears
+	VR_UpdateScope();
+	VR_ApplyTwoHandedAim();
+
 	// ---- Movement: move-hand thumbstick -> forward/side (deadzone + filter) ----
 	{
 		float dist = length(pMoveStick->x, pMoveStick->y);
@@ -782,6 +943,12 @@ void VR_HandleControllerInput()
 			float s2 = -fwd * sn + side * c;
 			fwd  = f2;
 			side = s2;
+		}
+
+		if (vr.scopeactive)
+		{
+			fwd  /= 3.0f;
+			side /= 3.0f;
 		}
 
 		remote_movementSideways = side;
@@ -838,6 +1005,26 @@ void VR_HandleControllerInput()
 		vr.snapTurn += vr_turnDelta;
 		while (vr.snapTurn >  180.0f) vr.snapTurn -= 360.0f;
 		while (vr.snapTurn < -180.0f) vr.snapTurn += 360.0f;
+	}
+
+	// scoped: turn-stick Y zooms (stick up = in), and the crouch pull below is off
+	{
+		static int lastZoomTime = 0;
+		int   now = Sys_Milliseconds();
+		float dt  = lastZoomTime ? (now - lastZoomTime) / 1000.0f : 0.0f;
+
+		lastZoomTime = now;
+		if (dt > 0.1f) dt = 0.1f;
+
+		if (vr.scopeactive && fabs(pTurnStick->y) > 0.3f &&
+		    fabs(pTurnStick->y) > fabs(pTurnStick->x))
+		{
+			float fov = vr_scope_fov->value * powf(0.25f, pTurnStick->y * dt);
+
+			if (fov < VR_SCOPE_FOV_MIN) fov = VR_SCOPE_FOV_MIN;
+			if (fov > VR_SCOPE_FOV_MAX) fov = VR_SCOPE_FOV_MAX;
+			Cvar_SetValue("vr_scope_fov", fov);
+		}
 	}
 
 	// ---- Buttons ----
@@ -929,7 +1116,7 @@ void VR_HandleControllerInput()
 			crouchStickDown = qfalse;   // vr_crouch_threshold 0 == stick crouch off
 			crouchHoldStart = 0;
 		}
-		else if (pTurnStick->y < -engage &&
+		else if (!vr.scopeactive && pTurnStick->y < -engage &&
 		         fabs(pTurnStick->y) > fabs(pTurnStick->x) * 1.2f)
 		{
 			int now = Sys_Milliseconds();

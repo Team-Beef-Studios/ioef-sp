@@ -591,6 +591,13 @@ void R_SetupProjection(viewParms_t *dest, float zProj, qboolean computeFrustum)
 		}
 		if ( gotFov )
 		{
+			float zoom = ri.VR_GetScopeZoom ? ri.VR_GetScopeZoom() : 1.0f;
+
+			tanLeft  /= zoom;
+			tanRight /= zoom;
+			tanUp    /= zoom;
+			tanDown  /= zoom;
+
 			xmin = zProj * tanLeft;
 			xmax = zProj * tanRight;
 			ymin = zProj * tanDown;

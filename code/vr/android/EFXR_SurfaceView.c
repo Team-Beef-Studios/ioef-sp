@@ -181,6 +181,16 @@ VR projection / per-frame setup
 ================================================================================
 */
 
+// not folded into VR_GetFovTangentsForEye: the 2D replay offsets need the unzoomed FOV
+float VR_GetScopeZoom(void)
+{
+	if (!vr.scopeactive || vr.fov_x <= vr_scope_fov->value)
+	{
+		return 1.0f;
+	}
+	return vr.fov_x / vr_scope_fov->value;
+}
+
 // Per-eye asymmetric view frustum tangents for the eye currently being
 // rendered (vr.eye).  The engine (renderergl1 R_SetupProjection) feeds these
 // into its existing projection/frustum/Z math, so we only need the tangents
@@ -246,7 +256,7 @@ float VR_GetEyeStereoSeparation(int eye)
 	XrVector3f *l, *r;
 	float dx, dy, dz, ipd, half;
 
-	if (!gAppState.SessionActive || gAppState.Views == NULL)
+	if (!gAppState.SessionActive || gAppState.Views == NULL || vr.scopeactive)
 	{
 		return 0.0f;
 	}
@@ -274,7 +284,7 @@ void VR_GetPositionalMove(float *forward, float *side)
 	*forward = 0.0f;
 	*side    = 0.0f;
 
-	if (!gAppState.SessionActive || vr.using_screen_layer || vr.cin_camera)
+	if (!gAppState.SessionActive || vr.using_screen_layer || vr.cin_camera || vr.scopeactive)
 	{
 		return;
 	}

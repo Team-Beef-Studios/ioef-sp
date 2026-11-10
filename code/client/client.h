@@ -658,6 +658,7 @@ qboolean CL_SP_IsUIActive( void );
 intptr_t QDECL CL_SP_UIVmMain( int command, ... );
 void CL_SP_UIUpdateConnectionString( const char *string );
 void CL_SP_UIUpdateConnectionMessageString( const char *string );
+qboolean CL_SP_UIMouseEventAbs( int x, int y );
 void CL_SP_RestartMusic( void );
 #endif
 

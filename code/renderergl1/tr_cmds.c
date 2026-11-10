@@ -136,6 +136,11 @@ static void R_VR_GetHudReplayOffset( stereoFrame_t stereoFrame, float *x, float 
 	}
 	parallax = ( atan2( 0.032f, depth ) / ( fovXRad * 0.5f ) ) * 320.0f;
 
+	// the scope is mono; HUD parallax would make its marks show double
+	if ( ri.VR_GetScopeZoom && ri.VR_GetScopeZoom() > 1.0f ) {
+		parallax = 0.0f;
+	}
+
 	// The captured command stream is generated with vr.eye == 0, so HUD-scaled
 	// cgame draw commands already include the left-eye convergence parallax.
 	// Add the eye-specific asymmetric-FOV recentering, and for the right eye
